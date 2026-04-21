@@ -1,0 +1,31 @@
+{
+    "mcts": {
+        "exploration_weight": 1.0,
+        "max_simulations": 3,
+        "max_depth": 5,
+        "num_actions": 2
+    },
+    "ppm": {
+        "input_dim": 1536,
+        "hidden_dim": 256,
+        "learning_rate": 0.001,
+        "batch_size": 32
+    },
+    "models": {
+        "openai": {
+            "model": "gpt-4o-mini",
+            "temperature": 0.7,
+            "max_tokens": 1000
+        }
+    },
+    "api": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "debug": true
+    },
+    "dashboard": {
+        "host": "0.0.0.0",
+        "port": 8050,
+        "debug": true
+    }
+}
