@@ -38,6 +38,13 @@ streamlit run streamlit.py
 ```
 Opens at `http://localhost:8501`
 
+**Member 1 MCTS ablation:**
+```bash
+python3 tools/member1_search_ablation.py
+```
+See `docs/member1_mcts.md` for the modified MCTS method, experiment table,
+slide notes, and demo example.
+
 ## Project Structure
 
 ```
