@@ -1,0 +1,245 @@
+[
+  {
+    "label": "A. Baseline MCTS",
+    "correct": 3,
+    "total": 10,
+    "accuracy": 0.3,
+    "avg_calls": 9.8,
+    "avg_latency": 26.79773892000012,
+    "ppm_pruned": 0,
+    "details": [
+      {
+        "problem": "If $x^2+bx+9$ has two non-real roots, find all real possible",
+        "correct": false,
+        "got": "The discriminant of the quadratic x^2 + ",
+        "expected": "(-6, 6)",
+        "subject": "algebra"
+      },
+      {
+        "problem": "Evaluate the infinite geometric series: $$\\frac{3}{2}-\\frac{",
+        "correct": false,
+        "got": "Identify the first term a = 3/2 and the ",
+        "expected": "\\frac{27}{26}",
+        "subject": "algebra"
+      },
+      {
+        "problem": "The sum of two positive integers $a$ and $b$ is 1001.  What ",
+        "correct": false,
+        "got": "Let d = gcd(a,b). Then a = d*x and b = d",
+        "expected": "143",
+        "subject": "number_theory"
+      },
+      {
+        "problem": "Tom's graduating class has 288 students. At the graduation c",
+        "correct": false,
+        "got": "Find all divisors of 288 that are at lea",
+        "expected": "58",
+        "subject": "number_theory"
+      },
+      {
+        "problem": "Suppose $f(x)$ is an invertible function, and suppose that $",
+        "correct": true,
+        "got": "Since f(2) = 4, then f(f(2)) = f(4). We ",
+        "expected": "2",
+        "subject": "algebra"
+      },
+      {
+        "problem": "Given eight distinguishable rings, let $n$ be the number of ",
+        "correct": false,
+        "got": "This is a stars-and-bars with ordering p",
+        "expected": "376",
+        "subject": "counting_and_probability"
+      },
+      {
+        "problem": "For how many integer values of $a$ does the equation $$x^2 +",
+        "correct": true,
+        "got": "Let the integer roots be r and s, so by ",
+        "expected": "8",
+        "subject": "algebra"
+      },
+      {
+        "problem": "The graphs of two functions, $p(x)$ and $q(x),$ are shown he",
+        "correct": false,
+        "got": "From the graph, p(x) = |x| - 2 and q(x) ",
+        "expected": "-10",
+        "subject": "algebra"
+      },
+      {
+        "problem": "I draw a card from a standard 52-card deck.  If I draw an Ac",
+        "correct": false,
+        "got": "To find the fair price, I need to comput",
+        "expected": "\\$15.48",
+        "subject": "counting_and_probability"
+      },
+      {
+        "problem": "Both roots of the quadratic equation $x^2 - 63 x + k = 0$ ar",
+        "correct": true,
+        "got": "Let the two prime roots be p and q. Then",
+        "expected": "1",
+        "subject": "algebra"
+      }
+    ]
+  },
+  {
+    "label": "B. Adaptive MCTS",
+    "correct": 4,
+    "total": 10,
+    "accuracy": 0.4,
+    "avg_calls": 6.6,
+    "avg_latency": 18.886789450000105,
+    "ppm_pruned": 0,
+    "details": [
+      {
+        "problem": "If $x^2+bx+9$ has two non-real roots, find all real possible",
+        "correct": false,
+        "got": "Solve the inequality b^2 < 36. This give",
+        "expected": "(-6, 6)",
+        "subject": "algebra"
+      },
+      {
+        "problem": "Evaluate the infinite geometric series: $$\\frac{3}{2}-\\frac{",
+        "correct": true,
+        "got": "Simplify the result if needed; 27/26 is ",
+        "expected": "\\frac{27}{26}",
+        "subject": "algebra"
+      },
+      {
+        "problem": "The sum of two positive integers $a$ and $b$ is 1001.  What ",
+        "correct": true,
+        "got": "To maximize d, we want the largest divis",
+        "expected": "143",
+        "subject": "number_theory"
+      },
+      {
+        "problem": "Tom's graduating class has 288 students. At the graduation c",
+        "correct": false,
+        "got": "Check that each candidate also satisfies",
+        "expected": "58",
+        "subject": "number_theory"
+      },
+      {
+        "problem": "Suppose $f(x)$ is an invertible function, and suppose that $",
+        "correct": true,
+        "got": "We are given f^{-1}(2) = 4, which means ",
+        "expected": "2",
+        "subject": "algebra"
+      },
+      {
+        "problem": "Given eight distinguishable rings, let $n$ be the number of ",
+        "correct": false,
+        "got": "We need to count the number of functions",
+        "expected": "376",
+        "subject": "counting_and_probability"
+      },
+      {
+        "problem": "For how many integer values of $a$ does the equation $$x^2 +",
+        "correct": false,
+        "got": "Factor the difference of squares: (a - 1",
+        "expected": "8",
+        "subject": "algebra"
+      },
+      {
+        "problem": "The graphs of two functions, $p(x)$ and $q(x),$ are shown he",
+        "correct": false,
+        "got": "Now q(x) = -|x|, so compute q(p(x)) for ",
+        "expected": "-10",
+        "subject": "algebra"
+      },
+      {
+        "problem": "I draw a card from a standard 52-card deck.  If I draw an Ac",
+        "correct": false,
+        "got": "Now apply suit multipliers. Clubs double",
+        "expected": "\\$15.48",
+        "subject": "counting_and_probability"
+      },
+      {
+        "problem": "Both roots of the quadratic equation $x^2 - 63 x + k = 0$ ar",
+        "correct": true,
+        "got": "The product of the roots is k, so k = 2 ",
+        "expected": "1",
+        "subject": "algebra"
+      }
+    ]
+  },
+  {
+    "label": "C. Adaptive + PPM (Meth.1)",
+    "correct": 5,
+    "total": 10,
+    "accuracy": 0.5,
+    "avg_calls": 6.1,
+    "avg_latency": 19.720436110000264,
+    "ppm_pruned": 75,
+    "details": [
+      {
+        "problem": "If $x^2+bx+9$ has two non-real roots, find all real possible",
+        "correct": true,
+        "got": "Since b is already real, the answer in i",
+        "expected": "(-6, 6)",
+        "subject": "algebra"
+      },
+      {
+        "problem": "Evaluate the infinite geometric series: $$\\frac{3}{2}-\\frac{",
+        "correct": false,
+        "got": "Verify the common ratio with the next te",
+        "expected": "\\frac{27}{26}",
+        "subject": "algebra"
+      },
+      {
+        "problem": "The sum of two positive integers $a$ and $b$ is 1001.  What ",
+        "correct": true,
+        "got": "Factor 1001 to find its divisors. 1001 =",
+        "expected": "143",
+        "subject": "number_theory"
+      },
+      {
+        "problem": "Tom's graduating class has 288 students. At the graduation c",
+        "correct": false,
+        "got": "Additionally, x must satisfy at least 15",
+        "expected": "58",
+        "subject": "number_theory"
+      },
+      {
+        "problem": "Suppose $f(x)$ is an invertible function, and suppose that $",
+        "correct": true,
+        "got": "Therefore, the answer is 2.",
+        "expected": "2",
+        "subject": "algebra"
+      },
+      {
+        "problem": "Given eight distinguishable rings, let $n$ be the number of ",
+        "correct": false,
+        "got": "Since there are 4 fingers and 8 distinct",
+        "expected": "376",
+        "subject": "counting_and_probability"
+      },
+      {
+        "problem": "For how many integer values of $a$ does the equation $$x^2 +",
+        "correct": false,
+        "got": "Use the quadratic formula to get x = [-a",
+        "expected": "8",
+        "subject": "algebra"
+      },
+      {
+        "problem": "The graphs of two functions, $p(x)$ and $q(x),$ are shown he",
+        "correct": true,
+        "got": "Sum these nine values: (-2) + (-1) + 0 +",
+        "expected": "-10",
+        "subject": "algebra"
+      },
+      {
+        "problem": "I draw a card from a standard 52-card deck.  If I draw an Ac",
+        "correct": false,
+        "got": "Compute the expected value for a non-spa",
+        "expected": "\\$15.48",
+        "subject": "counting_and_probability"
+      },
+      {
+        "problem": "Both roots of the quadratic equation $x^2 - 63 x + k = 0$ ar",
+        "correct": true,
+        "got": "Check that 61 is prime; it is. So the on",
+        "expected": "1",
+        "subject": "algebra"
+      }
+    ]
+  }
+]

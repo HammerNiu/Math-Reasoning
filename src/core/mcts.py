@@ -1,7 +1,8 @@
 import json
 import re
 import time
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -15,6 +16,27 @@ The default "baseline" strategy preserves the simple repo behavior. The
 candidate steps near the root, orders them by terminal promise and diversity,
 prunes weak near-duplicates, and stops early when a high-confidence answer is
 found.
+
+Large-model optimizations (all opt-in via config):
+  - eval_cache: skip redundant evaluate_state calls for identical states
+  - token_budget: stop search once estimated tokens exceed the budget
+  - max_state_steps: truncate long state contexts to the last N steps
+  - parallel_actions: generate multiple candidate steps concurrently
+  - max_retries / retry_delay: retry failed LLM calls with backoff
+
+Method 1 — Pruned MCTS (top_k_prune):
+  When a PPM is attached and top_k_prune > 0, _prepare_actions() scores every
+  candidate step with the PPM before expansion and keeps only the top-k.
+  This replaces the keyword heuristic with a learned signal and cuts the
+  branching factor to exactly k, reducing downstream LLM calls significantly.
+
+Method 2 — Asymmetric Policy–Reward (set_critic):
+  A separate critic model can be registered with set_critic(). It is used
+  exclusively for evaluate_state() (reward side), while the main model
+  handles step generation (policy side). Typical usage:
+      mcts.set_model(large_model)   # generator — DeepSeek-V3 / GPT-4o
+      mcts.set_critic(small_model)  # evaluator — GPT-4o-mini / Haiku
+      mcts.set_ppm(trained_ppm)     # PPM takes priority over critic when set
 """
 
 @dataclass
@@ -31,6 +53,15 @@ class MCTSConfig:
     early_stop_reward: float = 0.95
     early_stop_min_simulations: int = 1
     seed: Optional[int] = None
+    # --- Large-model optimizations ---
+    eval_cache: bool = True        # cache evaluate_state results (avoids duplicate API calls)
+    token_budget: int = 0          # stop search when estimated tokens exceed this (0 = no limit)
+    max_state_steps: int = 0       # truncate state to last N steps to limit context growth (0 = no limit)
+    parallel_actions: bool = False  # generate candidate steps concurrently (faster, more API calls in parallel)
+    max_retries: int = 3           # retry failed LLM calls
+    retry_delay: float = 2.0       # base delay in seconds for exponential backoff
+    # --- Method 1: Pruned MCTS ---
+    top_k_prune: int = 0           # keep only top-k steps by PPM score before expansion (0 = disabled)
 
 class MCTSNode:
     def __init__(self, state: str, parent: Optional['MCTSNode'] = None, action: Optional[str] = None):
@@ -79,12 +110,28 @@ class MCTSNode:
 class MCTS:
     def __init__(self, config: Optional[MCTSConfig] = None):
         self.config = config or MCTSConfig()
-        self._model = None
+        self._model = None   # policy model — generates candidate steps
+        self._critic = None  # reward model — evaluates states (Method 2); falls back to _model
+        self._ppm = None     # neural PPM — takes priority over critic when set (Methods 1 & 2)
         self._rng = np.random.default_rng(self.config.seed)
         self.last_stats: Dict[str, Any] = {}
+        self._eval_cache: Dict[str, float] = {}  # state → score cache
 
     def set_model(self, model: Any) -> None:
         self._model = model
+
+    def set_critic(self, model: Any) -> None:
+        """Attach a separate reward model for evaluate_state() (Method 2).
+
+        The critic is only used for scoring — step generation always uses the
+        main model.  PPM takes priority over the critic when both are set.
+        Typical pairing: large model as generator, cheap model as critic.
+        """
+        self._critic = model
+
+    def set_ppm(self, ppm: Any) -> None:
+        """Attach a trained ProcessPreferenceModel to guide search scoring."""
+        self._ppm = ppm
 
     @classmethod
     def from_config_file(cls, config_path: str) -> 'MCTS':
@@ -143,10 +190,16 @@ class MCTS:
 
         started_at = time.perf_counter()
         self._init_stats(root_state)
+        self._eval_cache.clear()
         root = MCTSNode(state=root_state)
         trajectory = []
 
         for simulation_index in range(self.config.max_simulations):
+            # Token budget check: stop search if over budget
+            if self._over_token_budget():
+                self.last_stats["budget_stopped"] = True
+                break
+
             self._stats_increment("simulations_run")
             node = root
 
@@ -204,7 +257,12 @@ class MCTS:
     # Domain-specific implementations for math reasoning
 
     def get_possible_actions(self, state: str) -> List[str]:
-        """Ask the LLM for candidate next reasoning steps."""
+        """Ask the LLM for candidate next reasoning steps.
+
+        When config.parallel_actions is True and multiple candidates are needed,
+        issues concurrent LLM calls to reduce wall-clock latency.
+        All calls use config.max_retries / retry_delay for fault tolerance.
+        """
         if self._model is None or self.is_terminal_state(state):
             return []
 
@@ -222,40 +280,128 @@ Use plain text only, no LaTeX. Format: output each step on its own line, prefixe
 STEP: <step text>
 STEP: <step text>"""
 
+        def _call() -> str:
+            return self._model.generate_response(prompt, temperature=0.8, max_tokens=300)
+
         try:
-            response = self._model.generate_response(prompt, temperature=0.8, max_tokens=300)
-            self._record_model_generation(prompt, response)
-            steps = re.findall(r'^\s*(?:[-*]\s*)?STEP:\s*(.+)$', response, flags=re.IGNORECASE | re.MULTILINE)
-            if not steps:
-                steps = [line.strip() for line in response.splitlines() if line.strip()]
-            return [s.strip() for s in steps if s.strip()] or [response.strip()]
+            if self.config.parallel_actions and action_count > 1:
+                # Fire action_count parallel calls and merge unique steps
+                with ThreadPoolExecutor(max_workers=action_count) as pool:
+                    futures = [pool.submit(self._call_with_retry, _call) for _ in range(action_count)]
+                    responses = [f.result() for f in as_completed(futures) if f.exception() is None]
+                all_steps: List[str] = []
+                for resp in responses:
+                    self._record_model_generation(prompt, resp)
+                    all_steps.extend(self._parse_steps(resp))
+                return all_steps or [responses[0].strip()] if responses else []
+            else:
+                response = self._call_with_retry(_call)
+                self._record_model_generation(prompt, response)
+                return self._parse_steps(response) or [response.strip()]
         except Exception:
             return []
 
+    def _parse_steps(self, response: str) -> List[str]:
+        steps = re.findall(r'^\s*(?:[-*]\s*)?STEP:\s*(.+)$', response, flags=re.IGNORECASE | re.MULTILINE)
+        if not steps:
+            steps = [line.strip() for line in response.splitlines() if line.strip()]
+        return [s.strip() for s in steps if s.strip()]
+
+    def _call_with_retry(self, fn) -> str:
+        """Call fn() with exponential backoff on failure."""
+        delay = self.config.retry_delay
+        last_exc: Exception = RuntimeError("no attempts made")
+        for attempt in range(max(1, self.config.max_retries)):
+            try:
+                return fn()
+            except Exception as exc:
+                last_exc = exc
+                if attempt < self.config.max_retries - 1:
+                    time.sleep(delay)
+                    delay *= 2
+        raise last_exc
+
     def apply_action(self, state: str, action: str) -> str:
-        """Append a reasoning step to the current state."""
-        return f"{state}\n{action}"
+        """Append a reasoning step; truncate context when max_state_steps is set.
+
+        Keeping only the problem + last N steps prevents unbounded token growth
+        when using large models with per-token pricing.
+        """
+        new_state = f"{state}\n{action}"
+        n = self.config.max_state_steps
+        if n > 0:
+            lines = [l for l in new_state.split('\n') if l.strip()]
+            if len(lines) > n + 1:          # preserve problem statement (line 0)
+                lines = lines[:1] + lines[-(n):]
+            new_state = '\n'.join(lines)
+        return new_state
 
     def is_terminal_state(self, state: str) -> bool:
         return _is_terminal(state)
 
     def evaluate_state(self, state: str) -> float:
-        """Score the current reasoning state using the LLM."""
+        """Score the current reasoning state.
+
+        Priority order:
+          1. Cache hit — return immediately, no model call.
+          2. PPM (if attached) — fastest learned scorer; Method 1 & 2.
+          3. Critic model (if set via set_critic) — Method 2 asymmetric reward;
+             uses the cheap/separate evaluator instead of the generator.
+          4. Main model evaluate_reasoning — fallback for terminal states.
+          5. Heuristic progress estimate — fallback for non-terminal states.
+        """
         if self._model is None:
             return 0.5
-        # Quick heuristic: terminal states with an answer score higher
-        if self.is_terminal_state(state):
-            lines = [l for l in state.split('\n') if l.strip()]
+
+        cache_key = state.strip()
+        if self.config.eval_cache and cache_key in self._eval_cache:
+            self._stats_increment("cache_hits")
+            return self._eval_cache[cache_key]
+
+        lines = [l for l in state.split('\n') if l.strip()]
+
+        if self._ppm is not None:
+            # Method 1 / 2 (PPM path): fastest, takes priority over any LLM critic
+            score = self._evaluate_with_ppm(lines)
+        elif self.is_terminal_state(state):
             problem = lines[0] if lines else ""
             steps = lines[1:] if len(lines) > 1 else [state]
+            # Method 2 (asymmetric critic path): use cheap evaluator if registered
+            evaluator = self._critic if self._critic is not None else self._model
             try:
                 self._record_model_evaluation(problem, steps)
-                return self._model.evaluate_reasoning(problem, steps)
+                score = self._call_with_retry(
+                    lambda: evaluator.evaluate_reasoning(problem, steps)
+                )
             except Exception:
-                return 0.7
-        if self._uses_adaptive_search():
-            return self._estimate_state_progress(state)
-        return 0.3
+                score = 0.7
+        elif self._uses_adaptive_search():
+            score = self._estimate_state_progress(state)
+        else:
+            score = 0.3
+
+        if self.config.eval_cache:
+            self._eval_cache[cache_key] = score
+        return score
+
+    def _evaluate_with_ppm(self, lines: List[str]) -> float:
+        """Use the PPM to score the state.
+
+        For terminal states, average all step scores.
+        For non-terminal states, score only the last step (most recent action).
+        Falls back to 0.5 on any error.
+        """
+        steps = lines[1:] if len(lines) > 1 else lines
+        if not steps:
+            return 0.5
+        try:
+            if self.is_terminal_state('\n'.join(lines)):
+                scores = [self._ppm.evaluate_step(s, self._model) for s in steps]
+                return float(np.mean(scores))
+            # Non-terminal: score only the latest step
+            return float(self._ppm.evaluate_step(steps[-1], self._model))
+        except Exception:
+            return 0.5
 
     # Member 1 adaptive search helpers
 
@@ -287,6 +433,15 @@ STEP: <step text>"""
         if len(unique_actions) < len(actions):
             self._stats_increment("pruned_actions", len(actions) - len(unique_actions))
 
+        # ── Method 1: PPM pre-scoring ──────────────────────────────────────
+        # When a PPM is attached and top_k_prune > 0, score every candidate
+        # with the PPM and keep only the top-k before any expansion happens.
+        # This replaces the keyword heuristic with a learned signal and cuts
+        # the branching factor to exactly k, reducing downstream LLM calls.
+        if self._ppm is not None and self.config.top_k_prune > 0:
+            return self._ppm_prune(unique_actions, state)
+
+        # ── Default: keyword heuristic scoring ────────────────────────────
         scored_actions = [
             (self._score_action(action, state, node), action)
             for action in unique_actions
@@ -308,6 +463,33 @@ STEP: <step text>"""
         max_keep = max(min_keep, self.config.max_branching_factor)
         kept = kept[:max_keep]
         self._stats_increment("pruned_actions", len(scored_actions) - len(kept))
+        return kept
+
+    def _ppm_prune(self, actions: List[str], state: str) -> List[str]:
+        """Score each candidate step with the PPM and keep top-k (Method 1).
+
+        Scores are computed in parallel when parallel_actions is enabled.
+        Falls back to heuristic score for any step that fails PPM scoring.
+        """
+        k = max(1, self.config.top_k_prune)
+
+        def _score(action: str) -> Tuple[float, str]:
+            try:
+                return (float(self._ppm.evaluate_step(action, self._model)), action)
+            except Exception:
+                return (self._estimate_action_value(action, state), action)
+
+        if self.config.parallel_actions and len(actions) > 1:
+            with ThreadPoolExecutor(max_workers=len(actions)) as pool:
+                scored = list(pool.map(_score, actions))
+        else:
+            scored = [_score(a) for a in actions]
+
+        scored.sort(key=lambda t: t[0], reverse=True)
+        kept = [action for _, action in scored[:k]]
+        n_pruned = len(scored) - len(kept)
+        self._stats_increment("ppm_pruned", n_pruned)
+        self._stats_increment("pruned_actions", n_pruned)
         return kept
 
     def _dedupe_actions(self, actions: Sequence[str]) -> List[str]:
@@ -412,6 +594,12 @@ STEP: <step text>"""
             "simulation": simulation
         }
 
+    def _over_token_budget(self) -> bool:
+        budget = self.config.token_budget
+        if budget <= 0:
+            return False
+        return self.last_stats.get("estimated_tokens", 0) >= budget
+
     def _init_stats(self, root_state: str) -> None:
         self.last_stats = {
             "strategy": self.config.search_strategy,
@@ -421,11 +609,16 @@ STEP: <step text>"""
             "terminal_nodes": 0,
             "generated_actions": 0,
             "pruned_actions": 0,
+            "ppm_pruned": 0,          # steps removed by PPM pre-scoring (Method 1)
             "model_calls": 0,
             "estimated_tokens": 0,
+            "cache_hits": 0,
+            "using_critic": self._critic is not None,   # Method 2 flag
+            "using_ppm": self._ppm is not None,         # Method 1/2 flag
             "best_reward": 0.0,
             "max_depth_reached": 0,
             "early_stopped": False,
+            "budget_stopped": False,
             "latency_seconds": 0.0
         }
 
