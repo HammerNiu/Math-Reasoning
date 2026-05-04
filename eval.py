@@ -3,10 +3,10 @@ Evaluation script for MATH and OlympiadBench datasets.
 Supports three solving strategies: direct, mcts, mcts+ppm.
 
 Usage:
-    python eval.py --dataset math --n 20
-    python eval.py --dataset math --n 20 --strategy mcts
-    python eval.py --dataset math --n 20 --strategy mcts+ppm --ppm-checkpoint checkpoints/ppm.pt
-    python eval.py --dataset olympiad --n 20 --strategy mcts
+    python eval.py --dataset math --n 50
+    python eval.py --dataset math --n 50 --strategy mcts
+    python eval.py --dataset math --n 50 --strategy mcts+ppm --ppm-checkpoint checkpoints/ppm.pt
+    python eval.py --dataset olympiad --n 50 --strategy mcts
 
 Supported models: openai, anthropic, deepseek  (set API keys in .env)
 """
