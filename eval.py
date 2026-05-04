@@ -1,11 +1,12 @@
 """
-Simple evaluation script for MATH and OlympiadBench datasets.
+Evaluation script for MATH and OlympiadBench datasets.
+Supports three solving strategies: direct, mcts, mcts+ppm.
 
 Usage:
-    python eval.py --dataset math --n 50
-    python eval.py --dataset olympiad --n 20
-    python eval.py --dataset math --n 100 --subject algebra --level "Level 5"
-    python eval.py --dataset all --n 30
+    python eval.py --dataset math --n 20
+    python eval.py --dataset math --n 20 --strategy mcts
+    python eval.py --dataset math --n 20 --strategy mcts+ppm --ppm-checkpoint checkpoints/ppm.pt
+    python eval.py --dataset olympiad --n 20 --strategy mcts
 
 Supported models: openai, anthropic, deepseek  (set API keys in .env)
 """
@@ -131,7 +132,6 @@ def load_olympiad(n: int, seed: int = 42) -> List[Dict]:
 # ---------------------------------------------------------------------------
 
 def _latex_to_plain(s: str) -> str:
-    # 去掉 $...$ 和 $$...$$ 包裹
     s = re.sub(r"\$\$(.+?)\$\$", r"\1", s, flags=re.DOTALL)
     s = re.sub(r"\$(.+?)\$", r"\1", s)
     s = re.sub(r"\\dfrac\{([^}]+)\}\{([^}]+)\}", r"\1/\2", s)
@@ -159,7 +159,6 @@ def _to_float(s: str) -> Optional[float]:
 
 
 def check_answer(prediction: str, expected: str) -> bool:
-    # prefer explicit "FINAL ANSWER: X" marker (last occurrence wins)
     fa_matches = list(re.finditer(r"FINAL ANSWER[:\s]+(.+)", prediction, re.IGNORECASE))
     if fa_matches:
         candidate = fa_matches[-1].group(1).strip()
@@ -188,7 +187,7 @@ def check_answer(prediction: str, expected: str) -> bool:
     return False
 
 # ---------------------------------------------------------------------------
-# Solve a single problem
+# Solvers
 # ---------------------------------------------------------------------------
 
 SOLVE_PROMPT = """\
@@ -198,28 +197,96 @@ FINAL ANSWER: <answer>
 Problem: {problem}"""
 
 
-def solve(problem: str, model) -> str:
+def solve_direct(problem: str, model) -> tuple[str, dict]:
     prompt = SOLVE_PROMPT.format(problem=problem)
-    return model.generate_response(prompt, temperature=0.0, max_tokens=2048)
+    answer = model.generate_response(prompt, temperature=0.0, max_tokens=2048)
+    return answer, {}
+
+
+def solve_mcts(problem: str, model, simulations: int = 3, ppm=None, top_k: int = 2) -> tuple[str, dict]:
+    from src.core.mcts import MCTS, MCTSConfig
+    cfg = MCTSConfig(
+        search_strategy="adaptive",
+        max_simulations=simulations,
+        max_depth=4,
+        num_actions=2,
+        eval_cache=True,
+        max_state_steps=8,
+        max_retries=3,
+        retry_delay=2.0,
+        top_k_prune=top_k if ppm else 0,
+    )
+    mcts = MCTS(cfg)
+    if ppm is not None:
+        mcts.set_ppm(ppm)
+    _, trajectory = mcts.search(problem, model)
+    stats = {
+        "api_calls": mcts.last_stats.get("model_calls", 0),
+        "ppm_pruned": mcts.last_stats.get("ppm_pruned", 0),
+        "best_reward": mcts.last_stats.get("best_reward", 0.0),
+    }
+
+    # 从 trajectory 中找包含 FINAL ANSWER 的完整推理状态
+    # trajectory 按时间顺序记录，取最后一个含 FINAL ANSWER 的 state
+    full_solution = ""
+    for entry in reversed(trajectory):
+        state = entry.get("state", "")
+        if "final answer" in state.lower():
+            full_solution = state
+            break
+
+    # 如果 MCTS 没到终止状态，追加一步让模型直接给出答案
+    if not full_solution:
+        best_state = trajectory[-1].get("state", problem) if trajectory else problem
+        followup = (
+            f"{best_state}\n\n"
+            f"Complete the solution above and state the answer on the last line exactly as:\n"
+            f"FINAL ANSWER: <your answer here>\n"
+            f"Do not add any text after FINAL ANSWER."
+        )
+        full_solution = model.generate_response(followup, temperature=0.0, max_tokens=512)
+        stats["api_calls"] += 1
+
+    return full_solution, stats
+
+
+def load_ppm(checkpoint: str) -> object:
+    from src.core.ppm import ProcessPreferenceModel, PPMConfig
+    from src.model.model_interface import LocalEmbedder
+    embedder = LocalEmbedder.get()
+    cfg = PPMConfig(input_dim=embedder.dim, hidden_dim=256)
+    ppm = ProcessPreferenceModel(cfg)
+    ppm.load_model(checkpoint)
+    print(f"  PPM loaded from {checkpoint}")
+    return ppm
 
 # ---------------------------------------------------------------------------
 # Evaluation loop
 # ---------------------------------------------------------------------------
 
-def evaluate(problems: List[Dict], model, label: str) -> Dict:
+def evaluate(problems: List[Dict], model, label: str, strategy: str,
+             simulations: int = 3, ppm=None) -> Dict:
     correct = 0
     errors = 0
+    total_api_calls = 0
     results = []
     t0 = time.perf_counter()
 
     for i, item in enumerate(problems):
         try:
-            prediction = solve(item["problem"], model)
+            if strategy == "direct":
+                prediction, stats = solve_direct(item["problem"], model)
+            else:
+                prediction, stats = solve_mcts(item["problem"], model,
+                                               simulations=simulations, ppm=ppm)
             ok = check_answer(prediction, item["answer"])
+            total_api_calls += stats.get("api_calls", 1)
         except Exception as e:
             prediction = f"ERROR: {e}"
+            stats = {}
             ok = False
             errors += 1
+            total_api_calls += 1
 
         correct += int(ok)
         results.append({
@@ -229,22 +296,32 @@ def evaluate(problems: List[Dict], model, label: str) -> Dict:
             "correct": ok,
             "subject": item.get("subject", ""),
             "source": item.get("source", ""),
+            "stats": stats,
         })
 
         mark = "OK" if ok else "NO"
         subj = f"[{item.get('subject','')[:10]}]" if item.get("subject") else ""
-        print(f"  [{i+1:>3}/{len(problems)}] {mark} {subj:<12} exp={item['answer'][:20]:<22} got={prediction[:40]!r}")
+        extra = f"  calls={stats.get('api_calls','')}" if strategy != "direct" else ""
+        # 显示提取出的最终答案，而非完整推理过程的开头
+        fa = list(re.finditer(r"FINAL ANSWER[:\s]+(.+)", prediction, re.IGNORECASE))
+        boxed = _extract_boxed(prediction)
+        extracted = fa[-1].group(1).strip()[:30] if fa else (boxed[:30] if boxed else prediction[:30])
+        print(f"  [{i+1:>3}/{len(problems)}] {mark} {subj:<12} exp={item['answer'][:20]:<22} got={extracted!r}{extra}")
 
     elapsed = time.perf_counter() - t0
     n = len(problems)
     accuracy = correct / n if n else 0.0
+    avg_calls = total_api_calls / n if n else 0.0
 
-    print(f"\n  {label}: {correct}/{n} correct  ({accuracy:.1%})  {elapsed:.0f}s total\n")
+    print(f"\n  {label}: {correct}/{n} correct  ({accuracy:.1%})  "
+          f"avg_calls={avg_calls:.1f}  {elapsed:.0f}s total\n")
     return {
         "label": label,
+        "strategy": strategy,
         "correct": correct,
         "total": n,
         "accuracy": accuracy,
+        "avg_api_calls": round(avg_calls, 1),
         "errors": errors,
         "elapsed_s": round(elapsed, 1),
         "results": results,
@@ -257,19 +334,24 @@ def evaluate(problems: List[Dict], model, label: str) -> Dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dataset",  choices=["math", "olympiad", "all"], default="math")
-    parser.add_argument("--n",        type=int, default=50, help="problems per dataset")
-    parser.add_argument("--model",    default="openai",
+    parser.add_argument("--dataset",    choices=["math", "olympiad", "all"], default="math")
+    parser.add_argument("--n",          type=int, default=20, help="题目数量")
+    parser.add_argument("--model",      default="openai",
                         choices=["openai", "anthropic", "deepseek", "ollama"])
-    parser.add_argument("--subject",  nargs="+", choices=MATH_SUBJECTS,
-                        help="MATH subjects to include (default: all)")
-    parser.add_argument("--level",    choices=["Level 1","Level 2","Level 3","Level 4","Level 5"],
-                        help="filter MATH by difficulty level")
-    parser.add_argument("--seed",     type=int, default=42)
-    parser.add_argument("--output",   type=Path, default=Path("data/eval_results.json"))
+    parser.add_argument("--strategy",   default="direct",
+                        choices=["direct", "mcts", "mcts+ppm"],
+                        help="direct=直接回答  mcts=树搜索  mcts+ppm=树搜索+PPM剪枝")
+    parser.add_argument("--simulations",type=int, default=3, help="MCTS模拟次数（默认3）")
+    parser.add_argument("--top-k",      type=int, default=2, help="PPM保留的top-k步（默认2）")
+    parser.add_argument("--ppm-checkpoint", type=str, default="checkpoints/ppm_math_level5.pt",
+                        help="PPM模型路径（mcts+ppm时使用）")
+    parser.add_argument("--subject",    nargs="+", choices=MATH_SUBJECTS)
+    parser.add_argument("--level",      choices=["Level 1","Level 2","Level 3","Level 4","Level 5"])
+    parser.add_argument("--seed",       type=int, default=42)
+    parser.add_argument("--output",     type=Path, default=Path("data/eval_results.json"))
     args = parser.parse_args()
 
-    # Load model
+    # 加载模型
     key_map = {
         "openai":    "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
@@ -280,31 +362,51 @@ def main():
     if not api_key and args.model != "ollama":
         sys.exit(f"{key_map[args.model]} not set — check your .env file.")
     model = ModelFactory.create_model(args.model, api_key)
-    print(f"\nModel: {args.model}  |  Dataset: {args.dataset}  |  N: {args.n}\n")
+
+    # 加载 PPM（如需要）
+    ppm = None
+    if args.strategy == "mcts+ppm":
+        ckpt = ROOT / args.ppm_checkpoint
+        if not ckpt.exists():
+            sys.exit(f"PPM checkpoint not found: {ckpt}\n"
+                     f"请先运行 run_experiment.py 训练 PPM，或改用 --strategy mcts")
+        ppm = load_ppm(str(ckpt))
+
+    print(f"\nModel: {args.model}  |  Strategy: {args.strategy}  |  "
+          f"Dataset: {args.dataset}  |  N: {args.n}")
+    if args.strategy != "direct":
+        print(f"MCTS simulations: {args.simulations}" +
+              (f"  |  PPM top-k: {args.top_k}" if ppm else ""))
+    print()
 
     all_results = []
 
     if args.dataset in ("math", "all"):
         print("Loading MATH benchmark...")
         problems = load_math(args.n, subjects=args.subject, level=args.level, seed=args.seed)
-        label = f"MATH" + (f" {args.level}" if args.level else "")
-        r = evaluate(problems, model, label)
+        label = f"MATH [{args.strategy}]" + (f" {args.level}" if args.level else "")
+        r = evaluate(problems, model, label, args.strategy,
+                     simulations=args.simulations, ppm=ppm)
         all_results.append(r)
 
     if args.dataset in ("olympiad", "all"):
         print("Loading OlympiadBench...")
         problems = load_olympiad(args.n, seed=args.seed)
-        r = evaluate(problems, model, "OlympiadBench")
+        label = f"OlympiadBench [{args.strategy}]"
+        r = evaluate(problems, model, label, args.strategy,
+                     simulations=args.simulations, ppm=ppm)
         all_results.append(r)
 
-    # Summary
-    print("=" * 60)
-    print(f"  {'Dataset':<25} {'Accuracy':>10} {'Correct':>10} {'Time':>8}")
-    print(f"  {'-'*55}")
+    # 汇总
+    print("=" * 65)
+    print(f"  {'Dataset':<30} {'Accuracy':>10} {'Correct':>10} {'Avg Calls':>10} {'Time':>6}")
+    print(f"  {'-'*60}")
     for r in all_results:
-        print(f"  {r['label']:<25} {r['accuracy']:>10.1%} "
-              f"{r['correct']:>4}/{r['total']:<5} {r['elapsed_s']:>6.0f}s")
-    print("=" * 60)
+        print(f"  {r['label']:<30} {r['accuracy']:>10.1%} "
+              f"{r['correct']:>4}/{r['total']:<5} "
+              f"{r['avg_api_calls']:>10.1f} "
+              f"{r['elapsed_s']:>5.0f}s")
+    print("=" * 65)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8") as f:
