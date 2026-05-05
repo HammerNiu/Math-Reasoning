@@ -58,18 +58,32 @@ ollama pull qwen2-math:7b
 These checks do not require API keys:
 
 ```bash
-.venv/bin/python -m compileall src backend experiments tools eval.py example.py app.py streamlit.py
-.venv/bin/python tools/member1_search_ablation.py
-.venv/bin/python tools/member2_scoring_ablation.py
-.venv/bin/python -c "from backend.main import app; print(app.title)"
+# Default: 20 train / 10 test, MATH Level 5 only
+python experiments/run_experiment.py
+
+# Custom size
+python experiments/run_experiment.py --train 40 --test 15
+
+# Full multi-dataset training with curriculum learning
+python experiments/run_experiment.py \
+    --dataset math_all gsm8k numina olympiad aime \
+    --curriculum --train 200 --test 30
 ```
 
-The deterministic ablations can also write report-ready Markdown:
+This runs the full pipeline:
+1. Collects MCTS trajectories on training problems (from selected datasets)
+2. Builds preference pairs with reward metadata and trains a **ContextAwarePPM** locally
+3. Compares Baseline vs Adaptive vs PPM-guided MCTS on held-out problems
 
-```bash
-.venv/bin/python tools/member1_search_ablation.py --write docs/member1_search_ablation.md
-.venv/bin/python tools/member2_scoring_ablation.py --write docs/member2_scoring_ablation.md
-```
+### Training Datasets
+
+| Flag | Dataset
+| `math_l5` | MATH Level 5 (default) 
+| `math_all` | All MATH levels 1–5  
+| `gsm8k` | GSM8K grade-school 
+| `numina` | NuminaMath-CoT (sampled) 
+| `olympiad` | OlympiadBench 
+| `aime` | AIME 1983–2024 
 
 ## Run the Demo
 
@@ -124,24 +138,6 @@ Train PPM:
   --output checkpoints/ppm.pt
 ```
 
-Run full comparison on MATH Level 5:
-
-```bash
-.venv/bin/python experiments/run_experiment.py \
-  --train 20 \
-  --test 10 \
-  --simulations 3 \
-  --output data/experiment_results.json
-```
-
-Run direct/MCTS/MCTS+PPM evaluation on MATH or OlympiadBench:
-
-```bash
-.venv/bin/python eval.py --dataset math --n 20 --strategy direct --model openai
-.venv/bin/python eval.py --dataset math --n 20 --strategy mcts --model openai
-.venv/bin/python eval.py --dataset math --n 20 --strategy mcts+ppm --model openai --ppm-checkpoint checkpoints/ppm.pt
-```
-
 ## Project Structure
 
 ```text
@@ -163,12 +159,3 @@ docs/experiment_analysis.md       Results and analysis
 docs/rubric_checklist.md          Rubric compliance checklist
 report/final_report.tex           ACM-style final report source
 ```
-
-## Submission Materials
-
-- Final report source/PDF: `report/final_report.tex`, `report/final_report.pdf`
-- GitHub repository link: https://github.com/HammerNiu/Math-Reasoning
-- Demo artifact link, once pushed: https://github.com/HammerNiu/Math-Reasoning/blob/main/docs/demo_video.gif
-- Presentation deck in this workspace: `math_reasoning_visual_polish.pptx`
-
-Before CourseWorks submission, verify that both GitHub and demo links are publicly accessible.

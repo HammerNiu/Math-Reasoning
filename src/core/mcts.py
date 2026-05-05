@@ -396,9 +396,12 @@ STEP: <step text>"""
 
         For terminal states, average all step scores.
         For non-terminal states, score only the last step (most recent action).
+        The problem statement (first line) is forwarded as context when a
+        ContextAwarePPM is attached; ignored by the base ProcessPreferenceModel.
         Falls back to 0.5 on any error.
         """
         steps = lines[1:] if len(lines) > 1 else lines
+        problem = lines[0] if lines else ""
         if not steps:
             return 0.5
         try:
@@ -476,9 +479,12 @@ STEP: <step text>"""
         """Score each candidate step with the PPM and keep top-k (Method 1).
 
         Scores are computed in parallel when parallel_actions is enabled.
+        The problem statement (first line of state) is forwarded as context
+        when a ContextAwarePPM is attached.
         Falls back to heuristic score for any step that fails PPM scoring.
         """
         k = max(1, self.config.top_k_prune)
+        problem = state.split('\n')[0].strip() if state else ""
 
         def _score(action: str) -> Tuple[float, str]:
             try:
@@ -570,6 +576,25 @@ STEP: <step text>"""
         return 1.0 - max_similarity
 
     def _select_rollout_action(self, actions: Sequence[str], state: str) -> str:
+        """PPM-guided Monte Carlo rollout sampling (Innovation 5 in PPM suite).
+
+        Original behavior: always pick actions[0] — deterministic, not Monte Carlo.
+        With PPM attached: sample proportionally to PPM scores so each simulation
+        explores a different path, restoring the stochastic property that MCTS
+        value estimates depend on.
+        """
+        if self._ppm is not None and len(actions) > 1:
+            problem = state.split('\n')[0].strip() if state else ""
+            scores: List[float] = []
+            for a in actions:
+                try:
+                    scores.append(max(1e-6, float(self._ppm.evaluate_step(a, self._model, problem=problem))))
+                except Exception:
+                    scores.append(1e-6)
+            total = sum(scores)
+            probs = [s / total for s in scores]
+            idx = int(self._rng.choice(len(actions), p=probs))
+            return actions[idx]
         return actions[0]
 
     def _best_child(self, root: MCTSNode) -> MCTSNode:
