@@ -2,13 +2,13 @@ import os
 from dotenv import load_dotenv
 from src.models.model_interface import OpenAIModel
 from src.core.mcts import MCTS
-from src.core.ppm import ProcessPreferenceModel, PPMConfig
+from src.core.scoring import HeuristicStepVerifier
 
 load_dotenv()
 
 model = OpenAIModel(os.getenv("OPENAI_API_KEY"))
 mcts = MCTS.from_config_file("config/default.json")
-ppm = ProcessPreferenceModel(PPMConfig(input_dim=1536, hidden_dim=256))
+verifier = HeuristicStepVerifier()
 
 problem = "Solve for x: 2x² - 5x + 3 = 0"
 print(f"Problem: {problem}\n")
@@ -22,7 +22,7 @@ for step in trajectory:
     if new_step in seen or new_step == problem.strip():
         continue
     seen.add(new_step)
-    confidence = float(1 / (1 + abs(ppm.evaluate_step(new_step, model))))
+    confidence = verifier.evaluate_step(new_step, model)
     print(f"Step: {new_step}")
     print(f"Confidence: {confidence:.2f}\n")
 

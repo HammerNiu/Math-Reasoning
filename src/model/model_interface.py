@@ -47,6 +47,7 @@ class ModelConfig:
     model: str
     temperature: float = 0.7
     max_tokens: int = 1000
+    timeout: float = 10.0
 
 class LLMInterface(ABC):
     @abstractmethod
@@ -76,8 +77,8 @@ class LLMInterface(ABC):
 class OpenAIModel(LLMInterface):
     def __init__(self, api_key: str, config: Optional[ModelConfig] = None):
         self.api_key = api_key
-        self.client = OpenAI(api_key=api_key)
         self.config = config or ModelConfig(model="gpt-4o-mini")
+        self.client = OpenAI(api_key=api_key, timeout=self.config.timeout, max_retries=0)
 
     @classmethod
     def from_config_file(cls, config_path: str, api_key: str) -> 'OpenAIModel':
@@ -132,8 +133,12 @@ Respond with only the numerical rating, nothing else."""
 class AnthropicModel(LLMInterface):
     def __init__(self, api_key: str, config: Optional[ModelConfig] = None):
         self.api_key = api_key
-        self.client = anthropic.Anthropic(api_key=api_key)
         self.config = config or ModelConfig(model="claude-3-5-haiku-20241022")
+        self.client = anthropic.Anthropic(
+            api_key=api_key,
+            timeout=self.config.timeout,
+            max_retries=0,
+        )
 
     @classmethod
     def from_config_file(cls, config_path: str, api_key: str) -> 'AnthropicModel':
@@ -183,8 +188,13 @@ class DeepSeekModel(LLMInterface):
 
     def __init__(self, api_key: str, config: Optional[ModelConfig] = None):
         self.api_key = api_key
-        self.client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
         self.config = config or ModelConfig(model="deepseek-chat")
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com",
+            timeout=self.config.timeout,
+            max_retries=0,
+        )
 
     @classmethod
     def from_config_file(cls, config_path: str, api_key: str) -> 'DeepSeekModel':
@@ -239,8 +249,13 @@ class OllamaModel(LLMInterface):
     def __init__(self, ollama_model: str = "qwen2.5-math:7b",
                  base_url: str = "http://localhost:11434",
                  config: Optional[ModelConfig] = None):
-        self.client = OpenAI(api_key="ollama", base_url=f"{base_url}/v1")
         self.config = config or ModelConfig(model=ollama_model)
+        self.client = OpenAI(
+            api_key="ollama",
+            base_url=f"{base_url}/v1",
+            timeout=self.config.timeout,
+            max_retries=0,
+        )
         self._embed_dim = 768  # fallback for sentence-transformers or random
         self._st_model = None  # lazy-loaded sentence-transformers model
 
