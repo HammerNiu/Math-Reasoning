@@ -40,18 +40,47 @@ DEEPSEEK_API_KEY=sk-...
 ## Running the Experiment
 
 ```bash
-# Full pipeline: collect → train PPM → evaluate 3 configs
+# Default: 20 train / 10 test, MATH Level 5 only
 python experiments/run_experiment.py
 
-# Or
-python experiments/run_experiment.py --train num --test num
+# Custom size
+python experiments/run_experiment.py --train 40 --test 15
+
+# Full multi-dataset training with curriculum learning
+python experiments/run_experiment.py \
+    --dataset math_all gsm8k numina olympiad aime \
+    --curriculum --train 200 --test 30
 ```
 
 This runs the full pipeline:
-1. Collects MCTS trajectories on training problems
-2. Builds preference pairs and trains the PPM locally
+1. Collects MCTS trajectories on training problems (from selected datasets)
+2. Builds preference pairs with reward metadata and trains a **ContextAwarePPM** locally
 3. Compares Baseline vs Adaptive vs PPM-guided MCTS on held-out problems
 
+### Supported Training Datasets
+
+| Flag | Dataset | Scale | Difficulty |
+|---|---|---|---|
+| `math_l5` | MATH Level 5 (default) | ~2K | ⭐⭐⭐⭐⭐ |
+| `math_all` | All MATH levels 1–5 | ~12K | ⭐–⭐⭐⭐⭐⭐ |
+| `gsm8k` | GSM8K grade-school | ~8.5K | ⭐ |
+| `numina` | NuminaMath-CoT (sampled) | 860K → 5K | ⭐⭐⭐ |
+| `olympiad` | OlympiadBench | ~8K | ⭐⭐⭐⭐⭐ |
+| `aime` | AIME 1983–2024 | ~900 | ⭐⭐⭐⭐⭐⭐ |
+
+
+### PPM Innovations
+
+| Innovation | Where | Effect |
+|---|---|---|
+| Context-Aware Dual Encoder | `ContextAwarePPM` | Joint (problem, step) encoding for context-sensitive scoring |
+| Reward-Proportional Soft Margin | `train_step()` | Loss margin scales with actual reward gap; high-confidence pairs push harder |
+| Hard Negative Mining | `_apply_hard_negatives()` | 30% of batch replaced with cosine-similar but lower-quality steps |
+| Multi-Dataset Curriculum | `run_experiment.py --curriculum` | Easy→Hard ordering across 6 math datasets |
+| Dropout + Cosine Annealing | `PPMConfig`, `PPMTrainer` | Regularization for small-dataset settings |
+| PPM-Guided Rollout | `_select_rollout_action()` | Softmax sampling over PPM scores restores Monte Carlo property |
+
+See [docs/ppm_innovations.md](docs/ppm_innovations.md) for the full bilingual writeup.
 
 ### Supporting Optimizations
 
