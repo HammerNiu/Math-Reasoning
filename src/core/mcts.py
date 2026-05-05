@@ -60,6 +60,7 @@ class MCTSConfig:
     parallel_actions: bool = False  # generate candidate steps concurrently (faster, more API calls in parallel)
     max_retries: int = 3           # retry failed LLM calls
     retry_delay: float = 2.0       # base delay in seconds for exponential backoff
+    fail_fast_on_generation_error: bool = False  # raise instead of returning no actions when generation fails
     # --- Method 1: Pruned MCTS ---
     top_k_prune: int = 0           # keep only top-k steps by PPM score before expansion (0 = disabled)
 
@@ -112,7 +113,7 @@ class MCTS:
         self.config = config or MCTSConfig()
         self._model = None   # policy model — generates candidate steps
         self._critic = None  # reward model — evaluates states (Method 2); falls back to _model
-        self._ppm = None     # neural PPM — takes priority over critic when set (Methods 1 & 2)
+        self._ppm = None     # PPM-compatible process scorer; takes priority over critic
         self._rng = np.random.default_rng(self.config.seed)
         self.last_stats: Dict[str, Any] = {}
         self._eval_cache: Dict[str, float] = {}  # state → score cache
@@ -130,7 +131,7 @@ class MCTS:
         self._critic = model
 
     def set_ppm(self, ppm: Any) -> None:
-        """Attach a trained ProcessPreferenceModel to guide search scoring."""
+        """Attach a trained PPM or compatible process scorer to guide search."""
         self._ppm = ppm
 
     @classmethod
@@ -298,7 +299,13 @@ STEP: <step text>"""
                 response = self._call_with_retry(_call)
                 self._record_model_generation(prompt, response)
                 return self._parse_steps(response) or [response.strip()]
-        except Exception:
+        except Exception as exc:
+            self._record_model_failure(exc)
+            if self.config.fail_fast_on_generation_error:
+                raise RuntimeError(
+                    "Model generation failed before MCTS could create candidate steps: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
             return []
 
     def _parse_steps(self, response: str) -> List[str]:
@@ -396,10 +403,10 @@ STEP: <step text>"""
             return 0.5
         try:
             if self.is_terminal_state('\n'.join(lines)):
-                scores = [self._ppm.evaluate_step(s, self._model) for s in steps]
+                scores = [self._score_with_process_model(s, '\n'.join(lines)) for s in steps]
                 return float(np.mean(scores))
             # Non-terminal: score only the latest step
-            return float(self._ppm.evaluate_step(steps[-1], self._model))
+            return self._score_with_process_model(steps[-1], '\n'.join(lines))
         except Exception:
             return 0.5
 
@@ -475,7 +482,7 @@ STEP: <step text>"""
 
         def _score(action: str) -> Tuple[float, str]:
             try:
-                return (float(self._ppm.evaluate_step(action, self._model)), action)
+                return (self._score_with_process_model(action, state), action)
             except Exception:
                 return (self._estimate_action_value(action, state), action)
 
@@ -491,6 +498,17 @@ STEP: <step text>"""
         self._stats_increment("ppm_pruned", n_pruned)
         self._stats_increment("pruned_actions", n_pruned)
         return kept
+
+    def _score_with_process_model(self, step: str, state: str = "") -> float:
+        """Score a step with the attached PPM-compatible scorer.
+
+        New scorers can accept an optional state= argument. Older PPM objects
+        only accept (step, embedder), so keep that path for compatibility.
+        """
+        try:
+            return float(self._ppm.evaluate_step(step, self._model, state=state))
+        except TypeError:
+            return float(self._ppm.evaluate_step(step, self._model))
 
     def _dedupe_actions(self, actions: Sequence[str]) -> List[str]:
         seen = set()
@@ -611,15 +629,18 @@ STEP: <step text>"""
             "pruned_actions": 0,
             "ppm_pruned": 0,          # steps removed by PPM pre-scoring (Method 1)
             "model_calls": 0,
+            "failed_model_calls": 0,
             "estimated_tokens": 0,
             "cache_hits": 0,
             "using_critic": self._critic is not None,   # Method 2 flag
-            "using_ppm": self._ppm is not None,         # Method 1/2 flag
+            "using_ppm": self._ppm is not None,         # Method 1/2 compatibility flag
+            "using_process_scorer": self._ppm is not None,
             "best_reward": 0.0,
             "max_depth_reached": 0,
             "early_stopped": False,
             "budget_stopped": False,
-            "latency_seconds": 0.0
+            "latency_seconds": 0.0,
+            "last_error": ""
         }
 
     def _stats_increment(self, key: str, amount: int = 1) -> None:
@@ -631,6 +652,10 @@ STEP: <step text>"""
         self._stats_increment("model_calls")
         self._stats_increment("estimated_tokens", self._estimate_tokens(prompt) + self._estimate_tokens(response))
         self._record_provider_token_usage()
+
+    def _record_model_failure(self, exc: Exception) -> None:
+        self._stats_increment("failed_model_calls")
+        self.last_stats["last_error"] = f"{type(exc).__name__}: {exc}"
 
     def _record_model_evaluation(self, problem: str, steps: Sequence[str]) -> None:
         self._stats_increment("model_calls")

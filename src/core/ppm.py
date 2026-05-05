@@ -81,7 +81,7 @@ class ProcessPreferenceModel(nn.Module):
             
             # Get value prediction
             value = self(embedding_tensor)
-            return value.item()
+            return torch.sigmoid(value).item()
     
     def train_step(self, 
                   preferred_steps: List[str],
@@ -122,7 +122,10 @@ class ProcessPreferenceModel(nn.Module):
     
     def load_model(self, path: str) -> None:
         """Load model state from file."""
-        checkpoint = torch.load(path)
+        try:
+            checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+        except TypeError:
+            checkpoint = torch.load(path, map_location="cpu")
         self.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.config = checkpoint['config']
@@ -150,7 +153,8 @@ class PPMTrainer:
                     embedder
                 )
                 epoch_loss += loss
-            train_losses.append(epoch_loss / len(training_data))
+            n_batches = max(1, len(self._create_batches(training_data, self.model.config.batch_size)))
+            train_losses.append(epoch_loss / n_batches)
             
             # Validation
             if validation_data:

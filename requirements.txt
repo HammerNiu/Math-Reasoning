@@ -7,3 +7,4 @@ uvicorn>=0.22.0
 streamlit>=1.28.0
 anthropic
 sentence-transformers>=2.2.0
+datasets>=2.18.0

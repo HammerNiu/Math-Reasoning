@@ -41,9 +41,35 @@ Improved search quality next round (self-evolution)
 
 ## 2. Implemented Optimisation Methods
 
+### Method 0: Hybrid Process Scoring with Lightweight Verifier
+
+**Idea**: The learned PPM is strongest after trajectory training, but before a
+checkpoint exists the system still needs a reliable process signal. The
+lightweight verifier in `src/core/scoring.py` rewards mathematical progress,
+explicit operations, verification language, and final-answer markers while
+penalizing guesses or unrelated steps. `HybridProcessScorer` combines this
+deterministic verifier with a trained PPM when one is available.
+
+**Location**: `src/core/scoring.py`
+
+**Usage**:
+```python
+from src.core.scoring import HeuristicStepVerifier, HybridProcessScorer
+
+# Verifier-only: no checkpoint required
+mcts.set_ppm(HeuristicStepVerifier())
+
+# Hybrid: use verifier to calibrate a trained PPM
+mcts.set_ppm(HybridProcessScorer(ppm=trained_ppm))
+```
+
+**Evidence**: `tools/member2_scoring_ablation.py` demonstrates that the hybrid
+scorer corrects controlled mis-rankings where a weak scorer prefers vague
+guesses over useful math steps.
+
 ### Method 1: Pruned MCTS with PPM Pre-scoring
 
-**Idea**: Before expanding a tree node, score every candidate step with the trained PPM and expand only the top-k highest-scoring branches instead of all candidates.
+**Idea**: Before expanding a tree node, score every candidate step with the trained PPM or PPM-compatible process scorer and expand only the top-k highest-scoring branches instead of all candidates.
 
 **Location**: `src/core/mcts.py` — `_prepare_actions()` → `_ppm_prune()`
 
@@ -53,12 +79,12 @@ Generate N candidate steps (LLM)
          │
          ▼  De-duplicate (Jaccard similarity)
          │
-    PPM attached & top_k_prune > 0?
+ process scorer attached & top_k_prune > 0?
          │
   ───────┼────────────────────────────
   Yes    │                          No
          ▼                           ▼
-  ppm.evaluate_step() per step    Keyword heuristic scoring (fallback)
+  scorer.evaluate_step() per step Keyword heuristic scoring (fallback)
          │
          ▼
   Sort → keep top-k only
@@ -253,6 +279,7 @@ Compares three configs on the same test problems:
 ```
 src/core/mcts.py                  MCTS: search, PPM pruning, asymmetric scoring
 src/core/ppm.py                   PPM network architecture and trainer
+src/core/scoring.py               Lightweight verifier + hybrid process scorer
 src/model/model_interface.py      LLM interfaces: OpenAI / Anthropic / DeepSeek / Ollama
                                   + LocalEmbedder (sentence-transformers, free)
 backend/main.py                   FastAPI: /solve, /compare-models

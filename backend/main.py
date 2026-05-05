@@ -6,9 +6,10 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from src.core.scoring import HeuristicStepVerifier, HybridProcessScorer
 from src.core.mcts import MCTS, MCTSConfig
 from src.core.ppm import ProcessPreferenceModel, PPMConfig
-from src.models.model_interface import ModelFactory
+from src.models.model_interface import LocalEmbedder, ModelFactory
 
 app = FastAPI(title="Math Reasoning Demonstrator API")
 
@@ -23,6 +24,8 @@ class MathProblem(BaseModel):
     search_strategy: str = "adaptive"   # "baseline" | "adaptive"
     temperature: float = 0.7
     ppm_checkpoint: Optional[str] = None  # path to a trained PPM .pt file
+    use_verifier: bool = True
+    top_k_prune: int = 2
 
 
 class SolutionResponse(BaseModel):
@@ -61,25 +64,57 @@ def _load_ppm(checkpoint_path: Optional[str]) -> Optional[ProcessPreferenceModel
         return None
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"PPM checkpoint not found: {checkpoint_path}")
-    config = PPMConfig(input_dim=1536)
+
+    config = PPMConfig(input_dim=384)
+    try:
+        import torch
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        except TypeError:
+            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        saved_config = checkpoint.get("config")
+        if isinstance(saved_config, PPMConfig):
+            config = saved_config
+        elif isinstance(saved_config, dict):
+            config = PPMConfig(**saved_config)
+    except Exception:
+        try:
+            config = PPMConfig(input_dim=LocalEmbedder.get().dim)
+        except Exception:
+            pass
+
     ppm = ProcessPreferenceModel(config)
     ppm.load_model(checkpoint_path)
     ppm.eval()
     return ppm
 
 
+def _build_process_scorer(ppm: Optional[ProcessPreferenceModel], use_verifier: bool):
+    if ppm is not None and use_verifier:
+        return HybridProcessScorer(ppm=ppm, verifier=HeuristicStepVerifier())
+    if ppm is not None:
+        return ppm
+    if use_verifier:
+        return HeuristicStepVerifier()
+    return None
+
+
 def _run_mcts(problem: MathProblem):
     model = _build_model(problem.model_name)
     ppm = _load_ppm(problem.ppm_checkpoint)
+    process_scorer = _build_process_scorer(ppm, problem.use_verifier)
 
     config = MCTSConfig(
         max_simulations=max(1, min(problem.mcts_simulations, 20)),
         search_strategy=problem.search_strategy,
         max_depth=5,
+        eval_cache=True,
+        max_state_steps=8,
+        top_k_prune=max(0, problem.top_k_prune) if process_scorer is not None else 0,
     )
     mcts = MCTS(config)
-    if ppm is not None:
-        mcts.set_ppm(ppm)
+    if process_scorer is not None:
+        mcts.set_ppm(process_scorer)
 
     t0 = time.perf_counter()
     action, trajectory = mcts.search(problem.problem_text, model)
