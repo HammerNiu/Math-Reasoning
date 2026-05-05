@@ -17,8 +17,8 @@ Target length: 5 minutes or less.
 ```
 
 Use the default `demo` model for the live presentation. It does not require an
-API key and should complete in a few seconds. If you switch to `openai` or
-another cloud provider, keep `Simulations = 1` for the first test because the
+API key and should complete in a few seconds. If you switch to OpenAI,
+DeepSeek, or Anthropic, keep `Simulations = 1` for the first test because the
 search loop performs multiple sequential model calls.
 
 Alternative API demo:

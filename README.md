@@ -50,7 +50,7 @@ ANTHROPIC_API_KEY=sk-...
 For local inference, install Ollama and pull a math model:
 
 ```bash
-ollama pull qwen2.5-math:7b
+ollama pull qwen2-math:7b
 ```
 
 ## Quick Verification
@@ -81,9 +81,10 @@ Streamlit comparison demo:
 
 The UI defaults to `demo`, a deterministic no-key model that finishes quickly
 and shows the baseline/improved comparison without spending API credits. Switch
-the model dropdown to `openai`, `deepseek`, `anthropic`, or `ollama` only when
-you want a real model run; for cloud models, start with `Simulations = 1`
-because each search simulation can make several model calls.
+the model dropdown to `openai`, `deepseek`, `anthropic`, or local
+`qwen2-math:7b` via Ollama only when you want a real model run; for cloud
+models, start with `Simulations = 1` because each search simulation can make
+several model calls.
 
 The first screen lets you run the same problem through:
 
