@@ -472,7 +472,18 @@ class DemoMathModel:
         state = self._extract_state(prompt)
         problem = state.splitlines()[0] if state.splitlines() else prompt
 
-        if "Continue the math solution" in prompt:
+        if (
+            "Continue the math solution" in prompt
+            or "Prior reasoning state:" in prompt
+            or "Give a concise verified solution" in prompt
+        ):
+            original_match = re.search(
+                r"Original problem:\s*(.*?)\n\s*Prior reasoning state:",
+                prompt,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
+            if original_match:
+                problem = original_match.group(1).strip()
             return self._final_answer(problem)
 
         action_count = self._requested_action_count(prompt)
@@ -534,6 +545,34 @@ class DemoMathModel:
                     "FINAL ANSWER: x = 2",
                 ],
             ]
+        elif "24x^2 - 19x - 35" in lower_problem or "(ax-5)(2bx+c)" in lower_problem.replace(" ", ""):
+            levels = [
+                [
+                    "Expand (Ax - 5)(2Bx + C) as 2ABx^2 + (AC - 10B)x - 5C.",
+                    "Guess A = 2, B = 6, and C = 7 without checking the x coefficient.",
+                    "Compare coefficients after expanding the product.",
+                    "Start from the constant term -5C = -35.",
+                ],
+                [
+                    "Match coefficients: 2AB = 24, AC - 10B = -19, and -5C = -35.",
+                    "From -5C = -35, get C = 7.",
+                    "Use 2AB = 24 to get AB = 12.",
+                ],
+                [
+                    "Substitute C = 7 into AC - 10B = -19 to get 7A - 10B = -19.",
+                    "With AB = 12, write B = 12/A.",
+                    "Substitute B = 12/A into 7A - 10B = -19.",
+                ],
+                [
+                    "Multiply by A: 7A^2 + 19A - 120 = 0.",
+                    "Solve 7A^2 + 19A - 120 = 0 to get the positive root A = 3.",
+                    "Then B = 12/A = 4.",
+                ],
+                [
+                    "Compute AB - 3C = 12 - 21 = -9.",
+                    "FINAL ANSWER: -9",
+                ],
+            ]
         elif "derivative" in lower_problem:
             levels = [
                 [
@@ -575,6 +614,8 @@ class DemoMathModel:
         lower_problem = problem.lower()
         if "2x^2 - 5x + 3 = 0" in lower_problem:
             return "x = 1 or x = 3/2"
+        if "24x^2 - 19x - 35" in lower_problem or "(ax-5)(2bx+c)" in lower_problem.replace(" ", ""):
+            return "-9"
         if "derivative" in lower_problem:
             return "f'(x) = 8x + 7"
         return "x = 2"
@@ -648,12 +689,20 @@ def run_mcts(problem: str, model, label: str, config: MCTSConfig, scorer=None):
 
 def finish_solution(problem: str, trajectory, model):
     best_state = max(trajectory, key=lambda e: len(e["state"]))["state"] if trajectory else problem
-    prompt = f"""Continue the math solution from the reasoning state below.
-End with exactly:
-FINAL ANSWER: <answer in plain text>
+    prompt = f"""You are a careful competition math solver.
+Use the prior reasoning only as hints. Re-check every algebraic sign and coefficient
+against the original problem. If the prior reasoning contains a mistake, correct it.
 
-{best_state}"""
-    return model.generate_response(prompt, temperature=0.2, max_tokens=500)
+Original problem:
+{problem}
+
+Prior reasoning state:
+{best_state}
+
+Give a concise verified solution. End with exactly:
+FINAL ANSWER: <answer in plain text>
+Do not write anything after FINAL ANSWER."""
+    return model.generate_response(prompt, temperature=0.0, max_tokens=900)
 
 
 def _format_latency(seconds: float) -> str:
@@ -1594,16 +1643,18 @@ def main() -> None:
 
     examples = {
         "Algebra": "Solve for x: 2x^2 - 5x + 3 = 0",
+        "Coefficient matching": "The expression 24x^2 - 19x - 35 can be written as (Ax-5)(2Bx+C), where A, B, and C are positive numbers. Find AB - 3C.",
         "Calculus": "Find the derivative of f(x) = 4x^2 + 7x - 2",
         "Linear equation": "Solve for x: x + 3 = 5",
     }
 
     def reset_demo_settings() -> None:
         st.session_state["model_provider_v4"] = "demo"
+        st.session_state["run_preset_v1"] = "Fast demo"
         st.session_state["simulations_v4"] = 1
         st.session_state["top_k_v4"] = 2
         st.session_state["use_verifier_v4"] = True
-        st.session_state["complete_v4"] = False
+        st.session_state["complete_v4"] = True
         st.session_state["ppm_checkpoint_v4"] = ""
 
     left, right = st.columns([0.95, 1.85], gap="large")
@@ -1640,7 +1691,7 @@ def main() -> None:
                 )
             elif provider in CLOUD_PROVIDERS:
                 st.markdown(
-                    '<div class="control-banner cloud">Cloud API mode: start with one simulation.</div>',
+                    '<div class="control-banner cloud">Cloud API mode: Fast demo is for UI checks. Use Accurate for complex algebra.</div>',
                     unsafe_allow_html=True,
                 )
             else:
@@ -1660,10 +1711,16 @@ def main() -> None:
                 )
                 st.caption("Temporary field. Nothing here is written to Git.")
 
+            run_preset = st.selectbox(
+                "Run preset",
+                ["Fast demo", "Balanced", "Accurate"],
+                index=0,
+                key="run_preset_v1",
+            )
             simulations = st.slider("Simulations", 1, 8, 1, key="simulations_v4")
             top_k = st.slider("Improved top-k", 1, 4, 2, key="top_k_v4")
             use_verifier = st.checkbox("Use verifier scorer", value=True, key="use_verifier_v4")
-            complete = st.checkbox("Generate final answer", value=False, key="complete_v4")
+            complete = st.checkbox("Generate final answer", value=True, key="complete_v4")
             ppm_checkpoint = st.text_input(
                 "PPM checkpoint",
                 value="",
@@ -1682,6 +1739,7 @@ def main() -> None:
             f"""
 <div class="mode-strip">
   <span class="mode-pill">Model <strong>{html.escape(provider)}</strong></span>
+  <span class="mode-pill">Preset <strong>{html.escape(run_preset)}</strong></span>
   <span class="mode-pill">Simulations <strong>{simulations}</strong></span>
   <span class="mode-pill">Top-k <strong>{top_k}</strong></span>
   <span class="mode-pill">Verifier <strong>{"on" if use_verifier else "off"}</strong></span>
@@ -1703,34 +1761,73 @@ def main() -> None:
                     scorer = HeuristicStepVerifier()
 
                 effective_simulations = simulations
-                if provider in CLOUD_PROVIDERS and simulations > 1:
+                effective_top_k = top_k
+                if provider in CLOUD_PROVIDERS and run_preset == "Fast demo" and simulations > 1:
                     effective_simulations = 1
-                    st.warning("Using 1 simulation for this cloud-model demo run to avoid long waits.")
+                    st.warning("Fast demo caps cloud-model runs at 1 simulation. Use Accurate for complex problems.")
+                if run_preset == "Accurate" and scorer is not None and top_k < 3:
+                    effective_top_k = 3
+                    st.info("Accurate preset keeps top-3 scored branches for harder problems.")
+
+                if run_preset == "Accurate":
+                    max_depth = 5
+                    baseline_actions = 3
+                    improved_actions = 4
+                    max_branching = 5
+                    min_branching = 2
+                    retries = 2
+                    retry_delay = 0.5
+                    generation_temperature = 0.25
+                    generation_max_tokens = 180
+                elif run_preset == "Balanced":
+                    max_depth = 4
+                    baseline_actions = 2
+                    improved_actions = 3
+                    max_branching = 4
+                    min_branching = 1
+                    retries = 1
+                    retry_delay = 0.25
+                    generation_temperature = 0.45
+                    generation_max_tokens = 200
+                else:
+                    max_depth = 3
+                    baseline_actions = 2
+                    improved_actions = 3
+                    max_branching = 4
+                    min_branching = 1
+                    retries = 1
+                    retry_delay = 0.25
+                    generation_temperature = 0.65
+                    generation_max_tokens = 220
 
                 baseline_cfg = MCTSConfig(
                     search_strategy="baseline",
                     max_simulations=effective_simulations,
-                    max_depth=3,
-                    num_actions=2,
+                    max_depth=max_depth,
+                    num_actions=baseline_actions,
                     eval_cache=True,
                     max_state_steps=8,
-                    max_retries=1,
-                    retry_delay=0.25,
+                    max_retries=retries,
+                    retry_delay=retry_delay,
                     fail_fast_on_generation_error=True,
+                    generation_temperature=generation_temperature,
+                    generation_max_tokens=generation_max_tokens,
                 )
                 improved_cfg = MCTSConfig(
                     search_strategy="adaptive",
                     max_simulations=effective_simulations,
-                    max_depth=3,
-                    num_actions=3,
-                    max_branching_factor=4,
-                    min_branching_factor=1,
-                    top_k_prune=top_k if scorer is not None else 0,
+                    max_depth=max_depth,
+                    num_actions=improved_actions,
+                    max_branching_factor=max_branching,
+                    min_branching_factor=min_branching,
+                    top_k_prune=effective_top_k if scorer is not None else 0,
                     eval_cache=True,
                     max_state_steps=8,
-                    max_retries=1,
-                    retry_delay=0.25,
+                    max_retries=retries,
+                    retry_delay=retry_delay,
                     fail_fast_on_generation_error=True,
+                    generation_temperature=generation_temperature,
+                    generation_max_tokens=generation_max_tokens,
                 )
 
                 status = st.empty()

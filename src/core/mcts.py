@@ -61,6 +61,8 @@ class MCTSConfig:
     max_retries: int = 3           # retry failed LLM calls
     retry_delay: float = 2.0       # base delay in seconds for exponential backoff
     fail_fast_on_generation_error: bool = False  # raise instead of returning no actions when generation fails
+    generation_temperature: float = 0.55  # lower values make math steps more deterministic
+    generation_max_tokens: int = 220      # keep candidate steps from turning into full solutions
     # --- Method 1: Pruned MCTS ---
     top_k_prune: int = 0           # keep only top-k steps by PPM score before expansion (0 = disabled)
 
@@ -268,21 +270,35 @@ class MCTS:
             return []
 
         action_count = self._candidate_count_for_state(state)
+        problem = state.split("\n", 1)[0].strip()
         prompt = f"""You are solving a math problem step by step.
+
+Original problem:
+{problem}
 
 Current reasoning so far:
 {state}
 
 Generate {action_count} different candidate next reasoning steps.
-Each step should advance the solution. If the problem is solved, write the final step as:
+Each candidate must be one atomic, verifiable next step, not a complete solution.
+Keep each candidate under 25 words when possible.
+For algebra, expand expressions before matching coefficients, then compare each coefficient exactly.
+Do not invent shortcut coefficient equations; every equation must follow from the previous line.
+Use exact arithmetic and check signs carefully.
+Do not include explanations before or after the STEP lines.
+If the problem is solved, write the final step as:
 FINAL ANSWER: <answer>
 
-Use plain text only, no LaTeX. Format: output each step on its own line, prefixed with "STEP:" like:
+Use plain text only. Format each candidate on its own line, prefixed with "STEP:" like:
 STEP: <step text>
 STEP: <step text>"""
 
         def _call() -> str:
-            return self._model.generate_response(prompt, temperature=0.8, max_tokens=300)
+            return self._model.generate_response(
+                prompt,
+                temperature=self.config.generation_temperature,
+                max_tokens=self.config.generation_max_tokens,
+            )
 
         try:
             if self.config.parallel_actions and action_count > 1:
@@ -311,8 +327,34 @@ STEP: <step text>"""
     def _parse_steps(self, response: str) -> List[str]:
         steps = re.findall(r'^\s*(?:[-*]\s*)?STEP:\s*(.+)$', response, flags=re.IGNORECASE | re.MULTILINE)
         if not steps:
+            steps = re.findall(r'^\s*\d+[.)]\s+(.+)$', response, flags=re.MULTILINE)
+        if not steps:
             steps = [line.strip() for line in response.splitlines() if line.strip()]
-        return [s.strip() for s in steps if s.strip()]
+        if len(steps) <= 1 and steps:
+            steps = self._split_long_candidate(steps[0])
+        return [self._clean_candidate_step(s) for s in steps if s.strip()]
+
+    def _split_long_candidate(self, text: str) -> List[str]:
+        cleaned = " ".join(text.strip().split())
+        pieces = re.split(
+            r'(?<=[.!?])\s+|;\s+|\\\]\s*|(?=\b(?:Next|Then|Therefore|Now|Finally)\b)|(?=\s*\d+[.)]\s+)',
+            cleaned,
+        )
+        pieces = [piece.strip() for piece in pieces if piece.strip()]
+        if len(pieces) > 1:
+            return pieces[: self._candidate_count_for_state(cleaned)]
+        if len(cleaned.split()) <= 40:
+            return [cleaned]
+        return pieces[: self._candidate_count_for_state(cleaned)] if pieces else [cleaned]
+
+    def _clean_candidate_step(self, text: str) -> str:
+        cleaned = " ".join(text.strip().split())
+        if "final answer:" in cleaned.lower():
+            return cleaned
+        words = cleaned.split()
+        if len(words) <= 42:
+            return cleaned
+        return " ".join(words[:42]).rstrip(" ,;") + "."
 
     def _call_with_retry(self, fn) -> str:
         """Call fn() with exponential backoff on failure."""
@@ -551,11 +593,14 @@ STEP: <step text>"""
             score += 0.10
         if any(word in lower for word in [
             "because", "therefore", "substitute", "simplify", "factor",
-            "differentiate", "solve", "check", "verify"
+            "differentiate", "solve", "check", "verify", "expand",
+            "coefficient", "compare", "match", "equation", "constant"
         ]):
             score += 0.08
         if len(action.split()) < 3:
             score -= 0.12
+        if len(action.split()) > 30:
+            score -= 0.18
         if any(word in lower for word in ["guess", "maybe", "unrelated", "skip"]):
             score -= 0.18
 
@@ -584,11 +629,10 @@ STEP: <step text>"""
         value estimates depend on.
         """
         if self._ppm is not None and len(actions) > 1:
-            problem = state.split('\n')[0].strip() if state else ""
             scores: List[float] = []
             for a in actions:
                 try:
-                    scores.append(max(1e-6, float(self._ppm.evaluate_step(a, self._model, problem=problem))))
+                    scores.append(max(1e-6, self._score_with_process_model(a, state)))
                 except Exception:
                     scores.append(1e-6)
             total = sum(scores)

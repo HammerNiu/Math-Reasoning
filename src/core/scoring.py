@@ -34,6 +34,7 @@ class VerifierConfig:
     verification_bonus: float = 0.08
     vague_penalty: float = 0.20
     too_short_penalty: float = 0.12
+    too_long_penalty: float = 0.18
     contradiction_penalty: float = 0.15
 
 
@@ -70,15 +71,18 @@ class HeuristicStepVerifier:
         if any(word in lower for word in [
             "because", "therefore", "substitute", "simplify", "factor",
             "differentiate", "solve", "apply", "subtract", "add", "divide",
-            "multiply", "isolate"
+            "multiply", "isolate", "expand", "coefficient", "compare",
+            "match", "equation", "constant", "derive"
         ]):
             score += cfg.reasoning_word_bonus
         if any(word in lower for word in ["check", "verify", "consistent", "satisfies"]):
             score += cfg.verification_bonus
-        if any(word in lower for word in ["guess", "maybe", "unrelated", "skip", "without checking"]):
+        if any(word in lower for word in ["guess", "maybe", "unrelated", "skip", "without checking", "try some values"]):
             score -= cfg.vague_penalty
         if len(text.split()) < 3 and "final answer:" not in lower:
             score -= cfg.too_short_penalty
+        if len(text.split()) > 30 and "final answer:" not in lower:
+            score -= cfg.too_long_penalty
         if any(word in lower for word in ["contradiction", "impossible", "incorrect"]) and "final answer:" not in lower:
             score -= cfg.contradiction_penalty
 
