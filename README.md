@@ -75,42 +75,15 @@ This runs the full pipeline:
 2. Builds preference pairs with reward metadata and trains a **ContextAwarePPM** locally
 3. Compares Baseline vs Adaptive vs PPM-guided MCTS on held-out problems
 
-### Supported Training Datasets
+### Training Datasets
 
-| Flag | Dataset | Scale | Difficulty |
-|---|---|---|---|
-| `math_l5` | MATH Level 5 (default) | ~2K | ⭐⭐⭐⭐⭐ |
-| `math_all` | All MATH levels 1–5 | ~12K | ⭐–⭐⭐⭐⭐⭐ |
-| `gsm8k` | GSM8K grade-school | ~8.5K | ⭐ |
-| `numina` | NuminaMath-CoT (sampled) | 860K → 5K | ⭐⭐⭐ |
-| `olympiad` | OlympiadBench | ~8K | ⭐⭐⭐⭐⭐ |
-| `aime` | AIME 1983–2024 | ~900 | ⭐⭐⭐⭐⭐⭐ |
-
-
-### PPM Innovations
-
-| Innovation | Where | Effect |
-|---|---|---|
-| Context-Aware Dual Encoder | `ContextAwarePPM` | Joint (problem, step) encoding for context-sensitive scoring |
-| Reward-Proportional Soft Margin | `train_step()` | Loss margin scales with actual reward gap; high-confidence pairs push harder |
-| Hard Negative Mining | `_apply_hard_negatives()` | 30% of batch replaced with cosine-similar but lower-quality steps |
-| Multi-Dataset Curriculum | `run_experiment.py --curriculum` | Easy→Hard ordering across 6 math datasets |
-| Dropout + Cosine Annealing | `PPMConfig`, `PPMTrainer` | Regularization for small-dataset settings |
-| PPM-Guided Rollout | `_select_rollout_action()` | Softmax sampling over PPM scores restores Monte Carlo property |
-
-See [docs/ppm_innovations.md](docs/ppm_innovations.md) for the full bilingual writeup.
-.venv/bin/python -m compileall src backend experiments tools eval.py example.py app.py streamlit.py
-.venv/bin/python tools/member1_search_ablation.py
-.venv/bin/python tools/member2_scoring_ablation.py
-.venv/bin/python -c "from backend.main import app; print(app.title)"
-```
-
-The deterministic ablations can also write report-ready Markdown:
-
-```bash
-.venv/bin/python tools/member1_search_ablation.py --write docs/member1_search_ablation.md
-.venv/bin/python tools/member2_scoring_ablation.py --write docs/member2_scoring_ablation.md
-```
+| Flag | Dataset
+| `math_l5` | MATH Level 5 (default) 
+| `math_all` | All MATH levels 1–5  
+| `gsm8k` | GSM8K grade-school 
+| `numina` | NuminaMath-CoT (sampled) 
+| `olympiad` | OlympiadBench 
+| `aime` | AIME 1983–2024 
 
 ## Run the Demo
 
@@ -164,24 +137,6 @@ Train PPM:
   --output checkpoints/ppm.pt
 ```
 
-Run full comparison on MATH Level 5:
-
-```bash
-.venv/bin/python experiments/run_experiment.py \
-  --train 20 \
-  --test 10 \
-  --simulations 3 \
-  --output data/experiment_results.json
-```
-
-Run direct/MCTS/MCTS+PPM evaluation on MATH or OlympiadBench:
-
-```bash
-.venv/bin/python eval.py --dataset math --n 20 --strategy direct --model openai
-.venv/bin/python eval.py --dataset math --n 20 --strategy mcts --model openai
-.venv/bin/python eval.py --dataset math --n 20 --strategy mcts+ppm --model openai --ppm-checkpoint checkpoints/ppm.pt
-```
-
 ## Project Structure
 
 ```text
@@ -203,12 +158,3 @@ docs/experiment_analysis.md       Results and analysis
 docs/rubric_checklist.md          Rubric compliance checklist
 report/final_report.tex           ACM-style final report source
 ```
-
-## Submission Materials
-
-- Final report source/PDF: `report/final_report.tex`, `report/final_report.pdf`
-- GitHub repository link: https://github.com/HammerNiu/Math-Reasoning
-- Demo artifact link, once pushed: https://github.com/HammerNiu/Math-Reasoning/blob/main/docs/demo_video.gif
-- Presentation deck in this workspace: `math_reasoning_visual_polish.pptx`
-
-Before CourseWorks submission, verify that both GitHub and demo links are publicly accessible.
