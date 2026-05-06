@@ -283,6 +283,7 @@ Generate {action_count} different candidate next reasoning steps.
 Each candidate must be one atomic, verifiable next step, not a complete solution.
 Keep each candidate under 25 words when possible.
 For algebra, expand expressions before matching coefficients, then compare each coefficient exactly.
+For coefficient matching, for example (Ax-k)(mBx+C) expands to mABx^2 + (AC-kmB)x - kC.
 Do not invent shortcut coefficient equations; every equation must follow from the previous line.
 Use exact arithmetic and check signs carefully.
 Do not include explanations before or after the STEP lines.

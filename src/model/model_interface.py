@@ -47,7 +47,7 @@ class ModelConfig:
     model: str
     temperature: float = 0.7
     max_tokens: int = 1000
-    timeout: float = 10.0
+    timeout: float = 30.0
 
 class LLMInterface(ABC):
     @abstractmethod

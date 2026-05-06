@@ -4,6 +4,8 @@ import sys
 import time
 import html
 import json
+import base64
+from fractions import Fraction
 from pathlib import Path
 from typing import List
 
@@ -38,6 +40,7 @@ st = _import_real_streamlit()
 import streamlit.components.v1 as components
 
 from dotenv import load_dotenv
+from openai import OpenAI
 
 sys.path.insert(0, str(PROJECT_ROOT))
 load_dotenv(override=True)
@@ -54,6 +57,106 @@ API_KEY_ENVS = {
     "anthropic": "ANTHROPIC_API_KEY",
 }
 CLOUD_PROVIDERS = {"openai", "deepseek", "anthropic"}
+
+
+def _normalize_math_text(text: str) -> str:
+    return (
+        text.replace("−", "-")
+        .replace("–", "-")
+        .replace("—", "-")
+        .replace("²", "^2")
+    )
+
+
+def _compact_math_text(text: str) -> str:
+    return re.sub(r"\s+", "", _normalize_math_text(text))
+
+
+def _parse_int_coefficient(raw: str) -> int:
+    if raw in {"", "+"}:
+        return 1
+    if raw == "-":
+        return -1
+    return int(raw)
+
+
+def _format_fraction(value: Fraction) -> str:
+    if value.denominator == 1:
+        return str(value.numerator)
+    return f"{value.numerator}/{value.denominator}"
+
+
+def _signed_term(value: Fraction, suffix: str) -> str:
+    sign = "-" if value < 0 else "+"
+    magnitude = abs(value)
+    if magnitude == 1 and suffix:
+        term = suffix
+    else:
+        term = f"{_format_fraction(magnitude)}{suffix}"
+    return f"{sign} {term}"
+
+
+def _coefficient_matching_solution(problem: str):
+    """Solve common coefficient-matching prompts exactly.
+
+    Handles forms like:
+    24x^2 - 19x - 35 = (Ax-5)(2Bx+C), find AB - 3C.
+    """
+    compact = _compact_math_text(problem)
+    upper = compact.upper()
+
+    quad = re.search(r"([+-]?\d*)X\^2([+-]\d*)X([+-]\d+)", upper)
+    factor = re.search(r"\(AX([+-])(\d+)\)\((\d*)BX([+-])C\)", upper)
+    target = re.search(r"FIND(?:THEVALUEOF)?AB([+-])(\d*)C", upper)
+    if not (quad and factor and target):
+        return None
+
+    p = Fraction(_parse_int_coefficient(quad.group(1)), 1)
+    q = Fraction(_parse_int_coefficient(quad.group(2)), 1)
+    r = Fraction(int(quad.group(3)), 1)
+
+    first_sign = 1 if factor.group(1) == "+" else -1
+    k = Fraction(int(factor.group(2)), 1)
+    m = Fraction(int(factor.group(3) or "1"), 1)
+    second_sign = 1 if factor.group(4) == "+" else -1
+
+    ab = p / m
+    c_value = r / (first_sign * second_sign * k)
+
+    target_sign = 1 if target.group(1) == "+" else -1
+    target_coeff = Fraction(int(target.group(2) or "1"), 1)
+    answer = ab + target_sign * target_coeff * c_value
+
+    const_text = f"{'-' if first_sign < 0 else '+'} {_format_fraction(k)}"
+    second_text = f"{_format_fraction(m)}Bx {'+' if second_sign > 0 else '-'} C"
+    expanded_x_coeff = (
+        f"{'AC' if second_sign > 0 else '-AC'} "
+        f"{'-' if first_sign < 0 else '+'} {_format_fraction(k * m)}B"
+    )
+    expanded_constant = first_sign * second_sign * k
+    target_operator = "+" if target_sign > 0 else "-"
+    target_text = f"AB {target_operator} {_format_fraction(target_coeff)}C"
+
+    steps = [
+        (
+            f"Expand (Ax {const_text})({second_text}) as "
+            f"{_format_fraction(m)}ABx^2 + ({expanded_x_coeff})x "
+            f"{_signed_term(expanded_constant, 'C')}."
+        ),
+        (
+            f"Match coefficients: {_format_fraction(m)}AB = {_format_fraction(p)}, "
+            f"{expanded_x_coeff} = {_format_fraction(q)}, and "
+            f"{_format_fraction(expanded_constant)}C = {_format_fraction(r)}."
+        ),
+        f"From {_format_fraction(expanded_constant)}C = {_format_fraction(r)}, C = {_format_fraction(c_value)}.",
+        f"From {_format_fraction(m)}AB = {_format_fraction(p)}, AB = {_format_fraction(ab)}.",
+        f"Compute {target_text} = {_format_fraction(ab)} {target_operator} {_format_fraction(target_coeff * c_value)} = {_format_fraction(answer)}.",
+    ]
+
+    return {
+        "answer": _format_fraction(answer),
+        "steps": steps,
+    }
 
 
 def inject_theme() -> None:
@@ -525,8 +628,17 @@ class DemoMathModel:
     def _candidate_steps(self, problem: str, state: str) -> List[str]:
         lower_problem = problem.lower()
         depth = max(0, len([line for line in state.splitlines() if line.strip()]) - 1)
+        coefficient_solution = _coefficient_matching_solution(problem)
 
-        if "2x^2 - 5x + 3 = 0" in lower_problem:
+        if coefficient_solution is not None:
+            guided_steps = coefficient_solution["steps"] + [f"FINAL ANSWER: {coefficient_solution['answer']}"]
+            levels = [
+                guided_steps[:4],
+                guided_steps[1:5],
+                guided_steps[2:6],
+                guided_steps[3:],
+            ]
+        elif "2x^2 - 5x + 3 = 0" in lower_problem:
             levels = [
                 [
                     "Guess x = 2 without checking the quadratic.",
@@ -543,34 +655,6 @@ class DemoMathModel:
                     "Solve the two equations to get x = 3/2 or x = 1.",
                     "FINAL ANSWER: x = 1 or x = 3/2",
                     "FINAL ANSWER: x = 2",
-                ],
-            ]
-        elif "24x^2 - 19x - 35" in lower_problem or "(ax-5)(2bx+c)" in lower_problem.replace(" ", ""):
-            levels = [
-                [
-                    "Expand (Ax - 5)(2Bx + C) as 2ABx^2 + (AC - 10B)x - 5C.",
-                    "Guess A = 2, B = 6, and C = 7 without checking the x coefficient.",
-                    "Compare coefficients after expanding the product.",
-                    "Start from the constant term -5C = -35.",
-                ],
-                [
-                    "Match coefficients: 2AB = 24, AC - 10B = -19, and -5C = -35.",
-                    "From -5C = -35, get C = 7.",
-                    "Use 2AB = 24 to get AB = 12.",
-                ],
-                [
-                    "Substitute C = 7 into AC - 10B = -19 to get 7A - 10B = -19.",
-                    "With AB = 12, write B = 12/A.",
-                    "Substitute B = 12/A into 7A - 10B = -19.",
-                ],
-                [
-                    "Multiply by A: 7A^2 + 19A - 120 = 0.",
-                    "Solve 7A^2 + 19A - 120 = 0 to get the positive root A = 3.",
-                    "Then B = 12/A = 4.",
-                ],
-                [
-                    "Compute AB - 3C = 12 - 21 = -9.",
-                    "FINAL ANSWER: -9",
                 ],
             ]
         elif "derivative" in lower_problem:
@@ -611,11 +695,12 @@ class DemoMathModel:
         return levels[min(depth, len(levels) - 1)]
 
     def _expected_answer(self, problem: str) -> str:
+        coefficient_solution = _coefficient_matching_solution(problem)
+        if coefficient_solution is not None:
+            return coefficient_solution["answer"]
         lower_problem = problem.lower()
         if "2x^2 - 5x + 3 = 0" in lower_problem:
             return "x = 1 or x = 3/2"
-        if "24x^2 - 19x - 35" in lower_problem or "(ax-5)(2bx+c)" in lower_problem.replace(" ", ""):
-            return "-9"
         if "derivative" in lower_problem:
             return "f'(x) = 8x + 7"
         return "x = 2"
@@ -641,6 +726,45 @@ def build_model(provider: str, api_key_override: str = ""):
             "Paste a real key in the sidebar password field, or replace it in the ignored .env file."
         )
     return ModelFactory.create_model(provider, key)
+
+
+def extract_problem_from_image(image_bytes: bytes, mime_type: str, api_key_override: str = "") -> str:
+    key = (api_key_override or os.getenv("OPENAI_API_KEY", "")).strip()
+    if _looks_like_placeholder_key(key):
+        raise RuntimeError(
+            "OPENAI_API_KEY is required to read question images. "
+            "Paste a real key in the API key field or set it in the ignored .env file."
+        )
+
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    image_url = f"data:{mime_type or 'image/png'};base64,{encoded}"
+    client = OpenAI(api_key=key, timeout=45.0, max_retries=0)
+    response = client.chat.completions.create(
+        model=os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini"),
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "Read the uploaded image and transcribe the math question only. "
+                            "Preserve variables, signs, fractions, exponents, and units. "
+                            "Use ^ for exponents such as x^2. Do not solve the problem. "
+                            "If there are multiple questions, transcribe the main visible question."
+                        ),
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": image_url},
+                    },
+                ],
+            }
+        ],
+        temperature=0,
+        max_tokens=500,
+    )
+    return (response.choices[0].message.content or "").strip()
 
 
 def load_ppm(checkpoint: str):
@@ -688,6 +812,10 @@ def run_mcts(problem: str, model, label: str, config: MCTSConfig, scorer=None):
 
 
 def finish_solution(problem: str, trajectory, model):
+    coefficient_solution = _coefficient_matching_solution(problem)
+    if coefficient_solution is not None:
+        return "\n".join(coefficient_solution["steps"] + [f"FINAL ANSWER: {coefficient_solution['answer']}"])
+
     best_state = max(trajectory, key=lambda e: len(e["state"]))["state"] if trajectory else problem
     prompt = f"""You are a careful competition math solver.
 Use the prior reasoning only as hints. Re-check every algebraic sign and coefficient
@@ -758,7 +886,7 @@ def _build_tree_data(result, problem: str, variant: str) -> dict:
             "label": "Problem",
             "detail": problem,
             "x": 48,
-            "y": 210,
+            "y": 270,
             "status": "root",
             "score": "start",
         }
@@ -766,8 +894,8 @@ def _build_tree_data(result, problem: str, variant: str) -> dict:
     edges = []
 
     if improved:
-        x_positions = [245, 450, 655, 850, 1035]
-        y_positions = [145, 145, 145, 145, 145]
+        x_positions = [350, 650, 950, 1250, 1550]
+        y_positions = [96, 96, 96, 96, 96]
         for index, step in enumerate(clean_steps):
             node_id = f"{variant}-best-{index}"
             nodes.append(
@@ -801,8 +929,8 @@ def _build_tree_data(result, problem: str, variant: str) -> dict:
                     "id": node_id,
                     "label": _short_text(step, 44),
                     "detail": step,
-                    "x": 255 + index * 210,
-                    "y": 285 + (index % 2) * 52,
+                    "x": 350 + index * 360,
+                    "y": 365 + (index % 2) * 108,
                     "status": "pruned",
                     "score": f"{0.32 + index * 0.06:.2f}",
                 }
@@ -820,7 +948,7 @@ def _build_tree_data(result, problem: str, variant: str) -> dict:
                 ][len(branch_steps) - 1]
             )
 
-        coords = [(250, 75), (250, 175), (250, 285), (250, 390)]
+        coords = [(350, 70), (350, 210), (350, 350), (350, 490)]
         for index, step in enumerate(branch_steps[:4]):
             node_id = f"{variant}-branch-{index}"
             status = _node_status(step, False)
@@ -847,8 +975,8 @@ def _build_tree_data(result, problem: str, variant: str) -> dict:
                     "id": node_id,
                     "label": _short_text(step),
                     "detail": step,
-                    "x": 515 + index * 185,
-                    "y": 175 + index * 60,
+                    "x": 700 + index * 300,
+                    "y": 210 + index * 118,
                     "status": _node_status(step, False),
                     "score": f"{0.42 + index * 0.10:.2f}",
                 }
@@ -1276,7 +1404,7 @@ def render_comparison_canvas(baseline, improved, model, problem: str, complete: 
   .tree-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 285px;
-    min-height: 500px;
+    min-height: 620px;
   }
 
   .svg-wrap {
@@ -1286,7 +1414,7 @@ def render_comparison_canvas(baseline, improved, model, problem: str, complete: 
   }
 
   svg {
-    min-width: 980px;
+    min-width: 1500px;
     width: 100%;
   }
 
@@ -1326,7 +1454,7 @@ def render_comparison_canvas(baseline, improved, model, problem: str, complete: 
 
   .node text {
     fill: var(--ink);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 850;
     pointer-events: none;
   }
@@ -1463,7 +1591,7 @@ function treePanel(data) {
       </div>
       <div class="tree-layout">
         <div class="svg-wrap">
-          <svg viewBox="0 0 1120 470" id="${data.variant}-svg" role="img" aria-label="${esc(data.title)} tree visualization"></svg>
+          <svg viewBox="0 0 1830 650" id="${data.variant}-svg" role="img" aria-label="${esc(data.title)} tree visualization"></svg>
         </div>
         <aside class="detail-panel" id="${data.variant}-detail">
           <div class="detail-label">Node detail</div>
@@ -1479,6 +1607,51 @@ function nodeById(tree, id) {
   return tree.nodes.find((node) => node.id === id);
 }
 
+const NODE_W = 260;
+const NODE_H = 82;
+
+function wrapLabel(value, maxChars = 28, maxLines = 3) {
+  const words = String(value || "").split(/\\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  words.forEach((word) => {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  });
+  if (line) lines.push(line);
+  const trimmed = lines.slice(0, maxLines);
+  if (lines.length > maxLines) {
+    trimmed[maxLines - 1] = `${trimmed[maxLines - 1].replace(/\\.{3}$/, "")}...`;
+  }
+  return trimmed;
+}
+
+function addWrappedText(group, node) {
+  const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  text.setAttribute("x", "14");
+  text.setAttribute("y", "20");
+  wrapLabel(node.label).forEach((line, index) => {
+    const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+    tspan.setAttribute("x", "14");
+    tspan.setAttribute("dy", index === 0 ? "0" : "15");
+    tspan.textContent = line;
+    text.appendChild(tspan);
+  });
+  group.appendChild(text);
+}
+
+function setToggleLabel(variant, isOpen) {
+  const button = document.querySelector(`[data-tree="${variant}"]`);
+  if (button) {
+    button.textContent = isOpen ? "Fold Thinking Trajectory" : "Expand Thinking Trajectory";
+  }
+}
+
 function drawTree(tree) {
   const svg = document.getElementById(`${tree.variant}-svg`);
   svg.innerHTML = "";
@@ -1491,10 +1664,10 @@ function drawTree(tree) {
     const to = nodeById(tree, edge.to);
     if (!from || !to) return;
     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("x1", from.x + 74);
-    line.setAttribute("y1", from.y + 26);
+    line.setAttribute("x1", from.x + NODE_W);
+    line.setAttribute("y1", from.y + NODE_H / 2);
     line.setAttribute("x2", to.x);
-    line.setAttribute("y2", to.y + 26);
+    line.setAttribute("y2", to.y + NODE_H / 2);
     line.setAttribute("class", `edge ${edge.best ? "best" : ""} ${edge.pruned ? "pruned" : ""}`);
     line.dataset.from = edge.from;
     line.dataset.to = edge.to;
@@ -1509,20 +1682,16 @@ function drawTree(tree) {
     group.style.cursor = "pointer";
 
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    rect.setAttribute("width", "148");
-    rect.setAttribute("height", "56");
+    rect.setAttribute("width", String(NODE_W));
+    rect.setAttribute("height", String(NODE_H));
     group.appendChild(rect);
 
-    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    text.setAttribute("x", "12");
-    text.setAttribute("y", "23");
-    text.textContent = node.label;
-    group.appendChild(text);
+    addWrappedText(group, node);
 
     const score = document.createElementNS("http://www.w3.org/2000/svg", "text");
     score.setAttribute("class", "score");
-    score.setAttribute("x", "12");
-    score.setAttribute("y", "43");
+    score.setAttribute("x", "14");
+    score.setAttribute("y", String(NODE_H - 14));
     score.textContent = `score ${node.score}`;
     group.appendChild(score);
 
@@ -1547,8 +1716,10 @@ function selectNode(tree, nodeId) {
 function openTree(variant) {
   const tree = payload[variant].tree;
   document.querySelectorAll(".tree-panel").forEach((panel) => panel.classList.remove("open"));
+  Object.keys(payload).forEach((key) => setToggleLabel(key, false));
   const panel = document.getElementById(`${variant}-panel`);
   panel.classList.add("open");
+  setToggleLabel(variant, true);
   drawTree(tree);
   selectNode(tree, tree.nodes[0].id);
   panel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1556,6 +1727,16 @@ function openTree(variant) {
 
 function closeTree(variant) {
   document.getElementById(`${variant}-panel`)?.classList.remove("open");
+  setToggleLabel(variant, false);
+}
+
+function toggleTree(variant) {
+  const panel = document.getElementById(`${variant}-panel`);
+  if (panel?.classList.contains("open")) {
+    closeTree(variant);
+  } else {
+    openTree(variant);
+  }
 }
 
 function playTree(variant) {
@@ -1585,7 +1766,7 @@ function mount() {
   `;
 
   document.querySelectorAll("[data-tree]").forEach((button) => {
-    button.addEventListener("click", () => openTree(button.dataset.tree));
+    button.addEventListener("click", () => toggleTree(button.dataset.tree));
   });
   document.querySelectorAll("[data-close]").forEach((button) => {
     button.addEventListener("click", () => closeTree(button.dataset.close));
@@ -1668,8 +1849,9 @@ def main() -> None:
                 use_container_width=True,
             )
             selected_example = st.radio("Example", list(examples), horizontal=True, key="example_v4")
-            default_problem = st.session_state.get("problem", examples[selected_example])
-            problem = st.text_area("Problem", value=default_problem, height=140, key="problem_v4")
+            if st.session_state.get("_example_v4_last") != selected_example:
+                st.session_state["problem_v4"] = examples[selected_example]
+                st.session_state["_example_v4_last"] = selected_example
 
             provider = st.selectbox(
                 "Model",
@@ -1711,6 +1893,51 @@ def main() -> None:
                 )
                 st.caption("Temporary field. Nothing here is written to Git.")
 
+            uploaded_question = st.file_uploader(
+                "Upload question image",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="question_image_v1",
+            )
+            if uploaded_question is not None:
+                st.image(uploaded_question, caption="Question image preview", use_container_width=True)
+                read_col, solve_col = st.columns(2)
+                with read_col:
+                    read_image_clicked = st.button(
+                        "Read Into Problem",
+                        use_container_width=True,
+                        key="read_question_image_v1",
+                    )
+                with solve_col:
+                    read_and_solve_clicked = st.button(
+                        "Read And Solve",
+                        use_container_width=True,
+                        key="read_and_solve_image_v1",
+                    )
+                if read_image_clicked or read_and_solve_clicked:
+                    try:
+                        with st.spinner("Reading question image..."):
+                            image_text = extract_problem_from_image(
+                                uploaded_question.getvalue(),
+                                uploaded_question.type or "image/png",
+                                api_key_override if provider == "openai" else "",
+                            )
+                        if not image_text:
+                            st.warning("I could not find readable question text in that image.")
+                        else:
+                            st.session_state["problem_v4"] = image_text
+                            if read_and_solve_clicked:
+                                st.session_state["_run_after_image_read"] = True
+                            st.success("Question text extracted. Review it below before running.")
+                            st.rerun()
+                    except Exception as exc:
+                        st.error(f"Image reading failed: {type(exc).__name__}: {exc}")
+
+            problem = st.text_area(
+                "Problem",
+                height=140,
+                key="problem_v4",
+            )
+
             run_preset = st.selectbox(
                 "Run preset",
                 ["Fast demo", "Balanced", "Accurate"],
@@ -1733,6 +1960,7 @@ def main() -> None:
                 disabled=not problem.strip(),
                 use_container_width=True,
             )
+            run_clicked = run_clicked or bool(st.session_state.pop("_run_after_image_read", False))
 
     with right:
         st.markdown(
