@@ -1,0 +1,63 @@
+{
+  "total": 8,
+  "correct": 8,
+  "accuracy": 1.0,
+  "rows": [
+    {
+      "name": "seating four students",
+      "expected": "2",
+      "prediction": "2",
+      "method": "exact permutation count without repeated neighbors",
+      "correct": true
+    },
+    {
+      "name": "seating five students",
+      "expected": "14",
+      "prediction": "14",
+      "method": "exact permutation count without repeated neighbors",
+      "correct": true
+    },
+    {
+      "name": "rod quadrilateral original",
+      "expected": "17",
+      "prediction": "17",
+      "method": "rod polygon side-inequality exact count",
+      "correct": true
+    },
+    {
+      "name": "rod quadrilateral variant",
+      "expected": "15",
+      "prediction": "15",
+      "method": "rod polygon side-inequality exact count",
+      "correct": true
+    },
+    {
+      "name": "integer triangle side count",
+      "expected": "9",
+      "prediction": "9",
+      "method": "triangle inequality integer third-side solver",
+      "correct": true
+    },
+    {
+      "name": "integer triangle side sum",
+      "expected": "49",
+      "prediction": "49",
+      "method": "triangle inequality integer third-side solver",
+      "correct": true
+    },
+    {
+      "name": "same-area integer triangle",
+      "expected": "24",
+      "prediction": "24",
+      "method": "same-area triangle third-side exact solver",
+      "correct": true
+    },
+    {
+      "name": "circle sum top digit",
+      "expected": "5",
+      "prediction": "5",
+      "method": "circle-sum digit constraint exact solver",
+      "correct": true
+    }
+  ]
+}

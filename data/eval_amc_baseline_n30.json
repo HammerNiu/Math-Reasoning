@@ -1,0 +1,290 @@
+[
+  {
+    "label": "AMC [mcts]",
+    "strategy": "mcts",
+    "correct": 2,
+    "total": 30,
+    "accuracy": 0.06666666666666667,
+    "avg_api_calls": 0.9,
+    "errors": 28,
+    "elapsed_s": 954.5,
+    "results": [
+      {
+        "problem": "Betsy designed a flag using blue triangles, small white squares, and a red cente",
+        "expected": "A",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Let $S$ be the set of points $(x,y)$ in the coordinate plane such that two of th",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "The product of three integers is $60$. What is the least possible positive sum o",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A regular pentagon with area $\\sqrt{5}+1$ is printed on paper and cut out. The f",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "At Rachelle's school an A counts 4 points, a B 3 points, a C 2 points, and a D 1",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "For real numbers $a$ and $b$, define $a$\\$$b = (a - b)^2$. What is $(x - y)^2$\\$",
+        "expected": "A",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Joy has $30$ thin rods, one each of every integer length from $1 \\text{ cm}$ thr",
+        "expected": "B",
+        "prediction": "s are 3, 7, 15. The candidate rod length ranges from 1 to 30, excluding rods already used.\nSTEP: Valid remaining candidate lengths: 6, 8-14, 16-24.\nSTEP: Rejected remaining candidate lengths: 1-2, 4-5, 25-30.\nSTEP: Therefore 17 remaining rods can be chosen to form the quadrilateral.\nFINAL ANSWER: 17",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 0,
+          "exact_solver": "rod polygon side-inequality exact count"
+        }
+      },
+      {
+        "problem": "Driving at a constant speed, Sharon usually takes $180$ minutes to drive from he",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "For each real number $a$ with $0 \\leq a \\leq 1$, let numbers $x$ and $y$ be chos",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Jason rolls three fair standard six-sided dice. Then he looks at the rolls and c",
+        "expected": "A",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Raashan, Sylvia, and Ted play the following game. Each starts with $\\$1$. A bell",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A frog sitting at the point $(1, 2)$ begins a sequence of jumps, where each jump",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Two is $10 \\%$ of $x$ and $20 \\%$ of $y$. What is $x - y$?\n\n$\\textbf{(A) } 1 \\qq",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "The ''tower function of twos'' is defined recursively as follows: $T(1) = 2$ and",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Positive integers $x$ and $y$ satisfy the equation $57x+22y = 400$. What is the ",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "How many ordered triples of integers $(a,b,c)$, with $a \\geq 2$, $b \\geq 1$, and",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Let $S$ be the set of all positive integer divisors of $100,000.$ How many numbe",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Let $a > 0$, and let $P(x)$ be a polynomial with integer coefficients such that\n",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Two non-congruent triangles have the same area. Each triangle has sides of lengt",
+        "expected": "C",
+        "prediction": "les with the same area have supplementary included angles, so their third-side lengths c and d satisfy c^2 + d^2 = 2(8^2 + 9^2) = 290.\nSTEP: Triangle inequality gives integer third sides from 2 to 16. Within this range, the pair is 11 and 13.\nSTEP: The requested sum is 11 + 13 = 24.\nFINAL ANSWER: 24",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 0,
+          "exact_solver": "same-area triangle third-side exact solver"
+        }
+      },
+      {
+        "problem": "The number $21!=51,090,942,171,709,440,000$ has over $60,000$ positive integer d",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Bertha has $6$ daughters and no sons. Some of her daughters have $6$ daughters, ",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "What is the area of the shaded region of the given $8\\times 5$ rectangle?\n\n```as",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Two parabolas have equations $y= x^2 + ax +b$ and $y= x^2 + cx +d$, where $a$, $",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A circle has been divided into 6 sectors of different sizes. Then 2 of the secto",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "The base of the pentahedron shown below is a $13 \\times 8$ rectangle, and its la",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "In $\\triangle ABC$, $\\angle ABC=45^\\circ$. Point $D$ is on $\\overline{BC}$ so th",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A set of teams held a round-robin tournament in which every team played every ot",
+        "expected": "A",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Let $N=123456789101112\\dots4344$ be the $79$-digit number that is formed by writ",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A bug travels in the coordinate plane, moving only along the lines that are para",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A $3-4-5$ right triangle is inscribed in circle $A$, and a $5-12-13$ right trian",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      }
+    ]
+  }
+]

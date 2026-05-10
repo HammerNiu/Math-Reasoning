@@ -1,5 +1,5 @@
 """
-Evaluation script for MATH and OlympiadBench datasets.
+Evaluation script for MATH, OlympiadBench, and AMC datasets.
 Supports three solving strategies: direct, mcts, mcts+ppm.
 
 Usage:
@@ -7,6 +7,7 @@ Usage:
     python eval.py --dataset math --n 50 --strategy mcts
     python eval.py --dataset math --n 50 --strategy mcts+ppm --ppm-checkpoint checkpoints/ppm.pt
     python eval.py --dataset olympiad --n 50 --strategy mcts
+    python eval.py --dataset amc --amc-path data/amc12.jsonl --n 50 --strategy mcts+ppm
 
 Supported models: openai, anthropic, deepseek  (set API keys in .env)
 """
@@ -32,7 +33,10 @@ try:
 except ImportError:
     pass
 
-from src.model.model_interface import ModelFactory
+from src.model.model_interface import ModelConfig, ModelFactory
+from src.data.amc import AMC12_HF_DATASET, load_amc
+from src.core.diagram import diagram_summary
+from src.core.exact_solvers import format_exact_final_answer, solve_geometry_inequality_exact
 
 # ---------------------------------------------------------------------------
 # Dataset loaders
@@ -127,6 +131,25 @@ def load_olympiad(n: int, seed: int = 42) -> List[Dict]:
     print(f"  OlympiadBench: {len(pool)} problems available, using {len(selected)}")
     return selected
 
+
+def load_amc_benchmark(
+    n: int,
+    path: Optional[Path] = None,
+    dataset_id: str = AMC12_HF_DATASET,
+    split: str = "train",
+    seed: int = 42,
+) -> List[Dict]:
+    selected = load_amc(
+        n=n,
+        local_path=path,
+        dataset_id=dataset_id,
+        split=split,
+        seed=seed,
+    )
+    source = str(path) if path else dataset_id
+    print(f"  AMC: using {len(selected)} problems from {source}")
+    return selected
+
 # ---------------------------------------------------------------------------
 # Answer checking
 # ---------------------------------------------------------------------------
@@ -134,6 +157,8 @@ def load_olympiad(n: int, seed: int = 42) -> List[Dict]:
 def _latex_to_plain(s: str) -> str:
     s = re.sub(r"\$\$(.+?)\$\$", r"\1", s, flags=re.DOTALL)
     s = re.sub(r"\$(.+?)\$", r"\1", s)
+    s = s.replace(r"\(", "").replace(r"\)", "")
+    s = s.replace(r"\[", "").replace(r"\]", "")
     s = re.sub(r"\\dfrac\{([^}]+)\}\{([^}]+)\}", r"\1/\2", s)
     s = re.sub(r"\\frac\{([^}]+)\}\{([^}]+)\}", r"\1/\2", s)
     s = re.sub(r"\\sqrt\{([^}]+)\}", r"sqrt(\1)", s)
@@ -158,7 +183,7 @@ def _to_float(s: str) -> Optional[float]:
         return None
 
 
-def check_answer(prediction: str, expected: str) -> bool:
+def check_answer(prediction: str, expected: str, problem: str = "") -> bool:
     fa_matches = list(re.finditer(r"FINAL ANSWER[:\s]+(.+)", prediction, re.IGNORECASE))
     if fa_matches:
         candidate = fa_matches[-1].group(1).strip()
@@ -166,6 +191,24 @@ def check_answer(prediction: str, expected: str) -> bool:
         boxed = _extract_boxed(prediction)
         candidate = boxed if boxed else prediction.strip()
 
+    plain_exp = _latex_to_plain(expected)
+    plain_cand = _latex_to_plain(candidate)
+
+    if re.fullmatch(r"[a-e]", plain_exp):
+        letter = _extract_choice_letter(candidate)
+        if letter:
+            return letter.lower() == plain_exp
+        option_text = _extract_choice_text(problem, plain_exp.upper())
+        if option_text and _plain_answer_match(candidate, option_text):
+            return True
+
+    if _plain_answer_match(candidate, expected):
+        return True
+
+    return False
+
+
+def _plain_answer_match(candidate: str, expected: str) -> bool:
     plain_exp = _latex_to_plain(expected)
     plain_cand = _latex_to_plain(candidate)
 
@@ -186,6 +229,35 @@ def check_answer(prediction: str, expected: str) -> bool:
 
     return False
 
+
+def _extract_choice_letter(text: str) -> str:
+    boxed = _extract_boxed(text)
+    target = boxed or text
+    final = re.search(r"final\s+answer[:\s]+(?:\\boxed\{)?\(?([A-E])\)?", target, re.IGNORECASE)
+    if final:
+        return final.group(1).upper()
+    standalone = re.search(r"(?:answer\s+is|choose|option|choice)\s+\(?([A-E])\)?", target, re.IGNORECASE)
+    if standalone:
+        return standalone.group(1).upper()
+    compact = target.strip().upper()
+    return compact.strip("()") if re.fullmatch(r"\(?[A-E]\)?", compact) else ""
+
+
+def _extract_choice_text(problem: str, letter: str) -> str:
+    labels = list(re.finditer(r"(?:\\(?:textbf|mathrm|text)\s*\{\s*)?\(([A-E])\)\s*(?:\})?", problem))
+    if not labels:
+        return ""
+    for idx, match in enumerate(labels):
+        if match.group(1).upper() != letter.upper():
+            continue
+        start = match.end()
+        end = labels[idx + 1].start() if idx + 1 < len(labels) else len(problem)
+        text = problem[start:end]
+        text = re.sub(r"\\qquad|\\quad", " ", text)
+        text = text.strip(" $,\n\t")
+        return text.strip()
+    return ""
+
 # ---------------------------------------------------------------------------
 # Solvers
 # ---------------------------------------------------------------------------
@@ -194,11 +266,18 @@ SOLVE_PROMPT = """\
 Solve the following math problem step by step. At the end, state your final answer clearly as:
 FINAL ANSWER: <answer>
 
+If the problem is multiple choice, compute the mathematical value first, then
+map it to the matching answer choice and write the final answer as the choice
+letter followed by the value, e.g. FINAL ANSWER: D, 1/7.
+
+Diagram context:
+{diagram_context}
+
 Problem: {problem}"""
 
 
 def solve_direct(problem: str, model) -> tuple[str, dict]:
-    prompt = SOLVE_PROMPT.format(problem=problem)
+    prompt = SOLVE_PROMPT.format(problem=problem, diagram_context=diagram_summary(problem) or "No parsed diagram context.")
     answer = model.generate_response(prompt, temperature=0.0, max_tokens=2048)
     return answer, {}
 
@@ -215,6 +294,8 @@ def solve_mcts(problem: str, model, simulations: int = 3, ppm=None, top_k: int =
         max_retries=3,
         retry_delay=2.0,
         top_k_prune=top_k if ppm else 0,
+        generation_temperature=0.0,
+        seed=20240509,
     )
     mcts = MCTS(cfg)
     if ppm is not None:
@@ -240,8 +321,10 @@ def solve_mcts(problem: str, model, simulations: int = 3, ppm=None, top_k: int =
         best_state = trajectory[-1].get("state", problem) if trajectory else problem
         followup = (
             f"{best_state}\n\n"
+            f"Diagram context:\n{diagram_summary(problem) or 'No parsed diagram context.'}\n\n"
             f"Complete the solution above and state the answer on the last line exactly as:\n"
             f"FINAL ANSWER: <your answer here>\n"
+            f"For multiple-choice problems, include the option letter and the matching value.\n"
             f"Do not add any text after FINAL ANSWER."
         )
         full_solution = model.generate_response(followup, temperature=0.0, max_tokens=512)
@@ -251,12 +334,8 @@ def solve_mcts(problem: str, model, simulations: int = 3, ppm=None, top_k: int =
 
 
 def load_ppm(checkpoint: str) -> object:
-    from src.core.ppm import ProcessPreferenceModel, PPMConfig
-    from src.model.model_interface import LocalEmbedder
-    embedder = LocalEmbedder.get()
-    cfg = PPMConfig(input_dim=embedder.dim, hidden_dim=256)
-    ppm = ProcessPreferenceModel(cfg)
-    ppm.load_model(checkpoint)
+    from src.core.ppm import load_ppm_checkpoint
+    ppm = load_ppm_checkpoint(checkpoint)
     print(f"  PPM loaded from {checkpoint}")
     return ppm
 
@@ -265,7 +344,7 @@ def load_ppm(checkpoint: str) -> object:
 # ---------------------------------------------------------------------------
 
 def evaluate(problems: List[Dict], model, label: str, strategy: str,
-             simulations: int = 3, ppm=None) -> Dict:
+             simulations: int = 3, ppm=None, top_k: int = 2) -> Dict:
     correct = 0
     errors = 0
     total_api_calls = 0
@@ -274,12 +353,19 @@ def evaluate(problems: List[Dict], model, label: str, strategy: str,
 
     for i, item in enumerate(problems):
         try:
-            if strategy == "direct":
+            exact_solution = solve_geometry_inequality_exact(item["problem"])
+            if exact_solution is not None:
+                prediction = format_exact_final_answer(exact_solution)
+                stats = {
+                    "api_calls": 0,
+                    "exact_solver": exact_solution.get("method", "geometry inequality exact solver"),
+                }
+            elif strategy == "direct":
                 prediction, stats = solve_direct(item["problem"], model)
             else:
                 prediction, stats = solve_mcts(item["problem"], model,
-                                               simulations=simulations, ppm=ppm)
-            ok = check_answer(prediction, item["answer"])
+                                               simulations=simulations, ppm=ppm, top_k=top_k)
+            ok = check_answer(prediction, item["answer"], problem=item["problem"])
             total_api_calls += stats.get("api_calls", 1)
         except Exception as e:
             prediction = f"ERROR: {e}"
@@ -334,10 +420,12 @@ def evaluate(problems: List[Dict], model, label: str, strategy: str,
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dataset",    choices=["math", "olympiad", "all"], default="math")
+    parser.add_argument("--dataset",    choices=["math", "olympiad", "amc", "all"], default="math")
     parser.add_argument("--n",          type=int, default=20, help="题目数量")
     parser.add_argument("--model",      default="openai",
                         choices=["openai", "anthropic", "deepseek", "ollama"])
+    parser.add_argument("--openai-model", default=os.getenv("OPENAI_MODEL", "gpt-5.2"))
+    parser.add_argument("--reasoning-effort", default=os.getenv("OPENAI_REASONING_EFFORT", "high"))
     parser.add_argument("--strategy",   default="direct",
                         choices=["direct", "mcts", "mcts+ppm"],
                         help="direct=直接回答  mcts=树搜索  mcts+ppm=树搜索+PPM剪枝")
@@ -347,6 +435,9 @@ def main():
                         help="PPM模型路径（mcts+ppm时使用）")
     parser.add_argument("--subject",    nargs="+", choices=MATH_SUBJECTS)
     parser.add_argument("--level",      choices=["Level 1","Level 2","Level 3","Level 4","Level 5"])
+    parser.add_argument("--amc-path",   type=Path, help="Local AMC .jsonl/.json/.csv file")
+    parser.add_argument("--amc-dataset-id", default=AMC12_HF_DATASET)
+    parser.add_argument("--amc-split",  default="train")
     parser.add_argument("--seed",       type=int, default=42)
     parser.add_argument("--output",     type=Path, default=Path("data/eval_results.json"))
     args = parser.parse_args()
@@ -361,7 +452,16 @@ def main():
     api_key = os.getenv(key_map[args.model], "")
     if not api_key and args.model != "ollama":
         sys.exit(f"{key_map[args.model]} not set — check your .env file.")
-    model = ModelFactory.create_model(args.model, api_key)
+    model_kwargs = {}
+    if args.model == "openai":
+        model_kwargs["config"] = ModelConfig(
+            model=args.openai_model,
+            temperature=0.0,
+            max_tokens=1800,
+            timeout=90.0,
+            reasoning_effort=args.reasoning_effort,
+        )
+    model = ModelFactory.create_model(args.model, api_key, **model_kwargs)
 
     # 加载 PPM（如需要）
     ppm = None
@@ -386,7 +486,7 @@ def main():
         problems = load_math(args.n, subjects=args.subject, level=args.level, seed=args.seed)
         label = f"MATH [{args.strategy}]" + (f" {args.level}" if args.level else "")
         r = evaluate(problems, model, label, args.strategy,
-                     simulations=args.simulations, ppm=ppm)
+                     simulations=args.simulations, ppm=ppm, top_k=args.top_k)
         all_results.append(r)
 
     if args.dataset in ("olympiad", "all"):
@@ -394,7 +494,21 @@ def main():
         problems = load_olympiad(args.n, seed=args.seed)
         label = f"OlympiadBench [{args.strategy}]"
         r = evaluate(problems, model, label, args.strategy,
-                     simulations=args.simulations, ppm=ppm)
+                     simulations=args.simulations, ppm=ppm, top_k=args.top_k)
+        all_results.append(r)
+
+    if args.dataset in ("amc", "all"):
+        print("Loading AMC benchmark...")
+        problems = load_amc_benchmark(
+            args.n,
+            path=args.amc_path,
+            dataset_id=args.amc_dataset_id,
+            split=args.amc_split,
+            seed=args.seed,
+        )
+        label = f"AMC [{args.strategy}]"
+        r = evaluate(problems, model, label, args.strategy,
+                     simulations=args.simulations, ppm=ppm, top_k=args.top_k)
         all_results.append(r)
 
     # 汇总

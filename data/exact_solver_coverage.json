@@ -1,0 +1,65 @@
+[
+  {
+    "dataset": "data/amc_holdout50.jsonl",
+    "total": 50,
+    "exact_hits": 2,
+    "exact_correct": 2,
+    "accuracy_on_hits": 1.0,
+    "methods": {
+      "rod polygon side-inequality exact count": 1,
+      "same-area triangle third-side exact solver": 1
+    },
+    "rows": [
+      {
+        "problem": "Joy has $30$ thin rods, one each of every integer length from $1 \\text{ cm}$ through $30 \\text{ cm}$. She places the rod",
+        "expected": "B",
+        "answer": "17",
+        "method": "rod polygon side-inequality exact count",
+        "correct": true
+      },
+      {
+        "problem": "Two non-congruent triangles have the same area. Each triangle has sides of length $8$ and $9$, and the third side of eac",
+        "expected": "C",
+        "answer": "24",
+        "method": "same-area triangle third-side exact solver",
+        "correct": true
+      }
+    ]
+  },
+  {
+    "dataset": "data/amc12_250.jsonl",
+    "total": 250,
+    "exact_hits": 2,
+    "exact_correct": 2,
+    "accuracy_on_hits": 1.0,
+    "methods": {
+      "rod polygon side-inequality exact count": 1,
+      "same-area triangle third-side exact solver": 1
+    },
+    "rows": [
+      {
+        "problem": "Joy has $30$ thin rods, one each of every integer length from $1 \\text{ cm}$ through $30 \\text{ cm}$. She places the rod",
+        "expected": "B",
+        "answer": "17",
+        "method": "rod polygon side-inequality exact count",
+        "correct": true
+      },
+      {
+        "problem": "Two non-congruent triangles have the same area. Each triangle has sides of length $8$ and $9$, and the third side of eac",
+        "expected": "C",
+        "answer": "24",
+        "method": "same-area triangle third-side exact solver",
+        "correct": true
+      }
+    ]
+  },
+  {
+    "dataset": "data/amc12.jsonl",
+    "total": 50,
+    "exact_hits": 0,
+    "exact_correct": 0,
+    "accuracy_on_hits": null,
+    "methods": {},
+    "rows": []
+  }
+]

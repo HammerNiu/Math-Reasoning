@@ -15,6 +15,7 @@ Innovations over the baseline single-step encoder:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -112,11 +113,19 @@ class ProcessPreferenceModel(nn.Module):
     ) -> torch.Tensor:
         """Embed a list of steps. `problems` is accepted for interface
         compatibility with ContextAwarePPM but is ignored here."""
+        if hasattr(embedder, "embed_texts"):
+            return torch.FloatTensor(embedder.embed_texts(steps))
         return torch.FloatTensor([embedder.embed_text(s) for s in steps])
 
     # ── Inference ─────────────────────────────────────────────────────────────
 
-    def evaluate_step(self, step: str, embedder: Any, problem: str = "") -> float:
+    def evaluate_step(
+        self,
+        step: str,
+        embedder: Any,
+        problem: str = "",
+        state: str = "",
+    ) -> float:
         """Score a single reasoning step.
 
         `problem` is accepted for interface compatibility with ContextAwarePPM
@@ -257,14 +266,30 @@ class ContextAwarePPM(ProcessPreferenceModel):
         problems: Optional[List[str]] = None,
     ) -> torch.Tensor:
         if problems and len(problems) == len(steps):
+            if hasattr(embedder, "embed_texts"):
+                problem_embs = embedder.embed_texts(problems)
+                step_embs = embedder.embed_texts(steps)
+                return torch.FloatTensor([p + s for p, s in zip(problem_embs, step_embs)])
             return torch.FloatTensor(
                 [self._encode_pair(s, embedder, p) for s, p in zip(steps, problems)]
             )
+        if hasattr(embedder, "embed_texts"):
+            step_embs = embedder.embed_texts(steps)
+            zeros = [[0.0] * len(step_embs[0]) for _ in step_embs] if step_embs else []
+            return torch.FloatTensor([p + s for p, s in zip(zeros, step_embs)])
         return torch.FloatTensor([self._encode_pair(s, embedder) for s in steps])
 
-    def evaluate_step(self, step: str, embedder: Any, problem: str = "") -> float:
+    def evaluate_step(
+        self,
+        step: str,
+        embedder: Any,
+        problem: str = "",
+        state: str = "",
+    ) -> float:
         """Score step relative to the problem context."""
         self.eval()
+        if state and not problem:
+            problem = state.split("\n", 1)[0].strip()
         with torch.no_grad():
             combined = self._encode_pair(step, embedder, problem)
             tensor = torch.FloatTensor(combined).unsqueeze(0)
@@ -383,3 +408,39 @@ class PPMTrainer:
                 loss = F.relu(nonpref_vals - pref_vals + 1.0).mean()
                 total_loss += loss.item()
         return total_loss / max(1, len(validation_data))
+
+
+def load_ppm_checkpoint(path: str | Path) -> ProcessPreferenceModel:
+    """Load either a step-only PPM or a ContextAwarePPM checkpoint.
+
+    Older app/eval code constructed ProcessPreferenceModel for every
+    checkpoint. That silently broke context-aware checkpoints because their
+    input dimension is 2 x embedding_dim. This helper restores the saved class
+    before loading weights.
+    """
+    checkpoint_path = str(path)
+    try:
+        payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    except TypeError:
+        payload = torch.load(checkpoint_path, map_location="cpu")
+
+    saved_config = payload.get("config", PPMConfig())
+    if isinstance(saved_config, PPMConfig):
+        config = saved_config
+    elif isinstance(saved_config, dict):
+        config = PPMConfig(**saved_config)
+    else:
+        config = PPMConfig()
+
+    class_name = str(payload.get("class", "ProcessPreferenceModel"))
+    if class_name == "ContextAwarePPM":
+        model: ProcessPreferenceModel = ContextAwarePPM(
+            embedding_dim=max(1, config.input_dim // 2),
+            config=config,
+        )
+    else:
+        model = ProcessPreferenceModel(config)
+
+    model.load_model(checkpoint_path)
+    model.eval()
+    return model

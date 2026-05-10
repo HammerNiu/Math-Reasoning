@@ -1,0 +1,274 @@
+[
+  {
+    "label": "AMC [mcts+ppm]",
+    "strategy": "mcts+ppm",
+    "correct": 18,
+    "total": 20,
+    "accuracy": 0.9,
+    "avg_api_calls": 5.0,
+    "errors": 0,
+    "elapsed_s": 181.1,
+    "results": [
+      {
+        "problem": "Betsy designed a flag using blue triangles, small white squares, and a red cente",
+        "expected": "A",
+        "prediction": "imes \\frac{s^2}{4} = s^2\n\\]\n\nNow, we compare the areas:\n\n- \\( B = 2s^2 \\)\n- \\( W = s^2 \\)\n- \\( R = s^2 \\)\n\nFrom these calculations, we can see that:\n\n- \\( B = 2R \\)\n- \\( W = R \\)\n\nThus, the correct relationship among the given options is:\n\n\\[\n\\text{(B)}\\ W = R\n\\]\n\nFINAL ANSWER: \\(\\text{(B)}\\ W = R\\)",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 2.4840915203094482
+        }
+      },
+      {
+        "problem": "Let $S$ be the set of points $(x,y)$ in the coordinate plane such that two of th",
+        "expected": "E",
+        "prediction": "\n   \\[\n   y - 4 \\geq 3 \\implies y \\geq 7\n   \\]\n   So, this condition gives us the ray \\( y = x + 6 \\) for \\( x \\geq 1 \\) and \\( y \\geq 7 \\).\n\nNow, let's analyze the intersections:\n- The line \\( x = 1 \\) for \\( y \\leq 7 \\) intersects the line \\( y = 7 \\) for \\( x \\leq 1 \\) at the point \\( (1, 7) \\).\n",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "The product of three integers is $60$. What is the least possible positive sum o",
+        "expected": "B",
+        "prediction": " 2, 15\\)**\n   - Product: \\(2 \\times 2 \\times 15 = 60\\)\n   - Sum: \\(2 + 2 + 15 = 19\\)\n\n7. **Combination 7: \\(1, 3, 20\\)**\n   - Product: \\(1 \\times 3 \\times 20 = 60\\)\n   - Sum: \\(1 + 3 + 20 = 24\\)\n\n8. **Combination 8: \\(1, 4, 15\\)**\n   - Product: \\(1 \\times 4 \\times 15 = 60\\)\n   - Sum: \\(1 + 4 + 15 = ",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "A regular pentagon with area $\\sqrt{5}+1$ is printed on paper and cut out. The f",
+        "expected": "B",
+        "prediction": "imes the side length of the original pentagon.\n\nSince the area of a similar figure scales with the square of the side length ratio, the area of the smaller pentagon is:\n\n\\[\n\\left(\\frac{\\sqrt{5} + 1}{4}\\right)^2 (\\sqrt{5} + 1)\n\\]\n\nCalculating this:\n\n\\[\n\\left(\\frac{\\sqrt{5} + 1}{4}\\right)^2 = \\frac{(\\",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 3.4319355487823486
+        }
+      },
+      {
+        "problem": "At Rachelle's school an A counts 4 points, a B 3 points, a C 2 points, and a D 1",
+        "expected": "D",
+        "prediction": " points), History = C (2 points):**\n   \\[\n   \\text{GPA} = \\frac{4 + 4 + 4 + 2}{4} = 3.5\n   \\]\n   Probability = \\(\\frac{1}{6} \\times \\left(1 - \\frac{1}{4} - \\frac{1}{3}\\right) = \\frac{1}{6} \\times \\frac{5}{12} = \\frac{5}{72}\\)\n\n4. **English = B (3 points), History = A (4 points):**\n   \\[\n   \\text{GPA",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 1.134988784790039
+        }
+      },
+      {
+        "problem": "For real numbers $a$ and $b$, define $a$\\$$b = (a - b)^2$. What is $(x - y)^2$\\$",
+        "expected": "A",
+        "prediction": " = (a - b)^2 = ((x - y)^2 - (y - x)^2)^2\n\\]\n\nSince \\((x - y)^2 = (y - x)^2\\), it follows that:\n\\[\n(x - y)^2 - (y - x)^2 = 0\n\\]\n\nThus, the expression simplifies to:\n\\[\n((x - y)^2 - (y - x)^2)^2 = 0^2 = 0\n\\]\n\nTherefore, the value of \\((x - y)^2\\)\\$\\((y - x)^2\\) is 0.\n\nFINAL ANSWER: \\(\\textbf{(A)}\\ 0\\)",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "Joy has $30$ thin rods, one each of every integer length from $1 \\text{ cm}$ thr",
+        "expected": "B",
+        "prediction": "select rods with lengths \\(x\\) such that \\(5 < x < 25\\). The eligible lengths are:\n\\[6, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24\\]\n\nCounting these, we find there are \\(17\\) eligible rods.\n\nThus, the number of rods Joy can choose as the fourth rod is \\(\\boxed{17}\\).\n\nFINAL ANSWER:",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 3.9616758823394775
+        }
+      },
+      {
+        "problem": "Driving at a constant speed, Sharon usually takes $180$ minutes to drive from he",
+        "expected": "B",
+        "prediction": ") into the equation:\n\n\\[\n\\frac{D}{3 \\cdot \\frac{D}{3}} + \\frac{\\frac{2}{3}D}{\\frac{D}{3} - 20} = 4.6\n\\]\n\nSimplify the first term:\n\n\\[\n\\frac{D}{D} = 1\n\\]\n\nSo the equation becomes:\n\n\\[\n1 + \\frac{\\frac{2}{3}D}{\\frac{D}{3} - 20} = 4.6\n\\]\n\nSubtract 1 from both sides:\n\n\\[\n\\frac{\\frac{2}{3}D}{\\frac{D}{3} -",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 2.9161758422851562
+        }
+      },
+      {
+        "problem": "For each real number $a$ with $0 \\leq a \\leq 1$, let numbers $x$ and $y$ be chos",
+        "expected": "B",
+        "prediction": "2\\pi y)\\) are negative, which happens when \\(x\\) and \\(y\\) are in the intervals where \\(\\cos(2\\pi t) < 0\\), i.e., \\(t \\in \\left(\\frac{1}{4}, \\frac{3}{4}\\right)\\).\n\nFor \\(x \\in [0, a]\\), the interval \\(\\left(\\frac{1}{4}, \\frac{3}{4}\\right)\\) intersects with \\([0, a]\\) as follows:\n- If \\(a \\leq \\frac{",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 3.100996255874634
+        }
+      },
+      {
+        "problem": "Jason rolls three fair standard six-sided dice. Then he looks at the rolls and c",
+        "expected": "A",
+        "prediction": ". From the analysis above, this occurs when:\n\n- **Sum = 6**: Possible combinations are (1, 1, 4), (1, 4, 1), (4, 1, 1), (1, 2, 3), (1, 3, 2), (2, 1, 3), (2, 3, 1), (3, 1, 2), (3, 2, 1).\n- **Sum = 8**: Possible combinations are (1, 1, 6), (1, 6, 1), (6, 1, 1), (2, 2, 4), (2, 4, 2), (4, 2, 2), (2, 3, ",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "Raashan, Sylvia, and Ted play the following game. Each starts with $\\$1$. A bell",
+        "expected": "B",
+        "prediction": "ac{1}{8}\n   \\]\n\nThus, the probability that the distribution of money remains unchanged after one round is the sum of the probabilities of the two scenarios above:\n\\[\n\\frac{3}{8} + \\frac{1}{8} = \\frac{1}{2}\n\\]\n\nSince the distribution must remain unchanged after each of the 2019 rounds for each player",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "A frog sitting at the point $(1, 2)$ begins a sequence of jumps, where each jump",
+        "expected": "B",
+        "prediction": "\\(P(1, 2)\\) using the recursive relation and boundary conditions.\n\n1. **\\(P(0, y) = 1\\) and \\(P(4, y) = 1\\):** The frog is on a vertical side.\n2. **\\(P(x, 0) = 0\\) and \\(P(x, 4) = 0\\):** The frog is on a horizontal side.\n\n**Calculate \\(P(2, 2)\\):**\n\\[\nP(2, 2) = \\frac{1}{4} \\left( P(3, 2) + P(1, 2) +",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "Two is $10 \\%$ of $x$ and $20 \\%$ of $y$. What is $x - y$?\n\n$\\textbf{(A) } 1 \\qq",
+        "expected": "D",
+        "prediction": ":\n\\[\n0.1x = 2\n\\]\nDivide both sides by 0.1:\n\\[\nx = \\frac{2}{0.1} = 20\n\\]\n\nFor the second equation:\n\\[\n0.2y = 2\n\\]\nDivide both sides by 0.2:\n\\[\ny = \\frac{2}{0.2} = 10\n\\]\n\nNow, we need to find \\(x - y\\):\n\\[\nx - y = 20 - 10 = 10\n\\]\n\nThus, the value of \\(x - y\\) is 10.\n\nFINAL ANSWER: \\(\\textbf{(D) } 10\\)",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "The ''tower function of twos'' is defined recursively as follows: $T(1) = 2$ and",
+        "expected": "E",
+        "prediction": " 2009)^{2^{2 \\uparrow\\uparrow 2010}} = 2^{(2 \\uparrow\\uparrow 2009) \\cdot 2^{2 \\uparrow\\uparrow 2010}} \\]\n\nThe expression \\( B = 2^{2 \\uparrow\\uparrow 2011} \\) is a tower of 2's of height 2011.\n\nWe need to determine the largest integer \\( k \\) such that:\n\\[\n\\underbrace{\\log_2\\log_2\\log_2\\ldots\\log_2",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.6875773072242737
+        }
+      },
+      {
+        "problem": "Positive integers $x$ and $y$ satisfy the equation $57x+22y = 400$. What is the ",
+        "expected": "E",
+        "prediction": "es 2 + 1\n\\]\n\\[\n4 = 1 \\times 4 + 0\n\\]\n\nBack-substituting to express 1 as a linear combination of 22 and 13:\n\n\\[\n1 = 9 - 2 \\times 4\n\\]\n\\[\n4 = 13 - 9\n\\]\n\\[\n1 = 9 - 2(13 - 9) = 3 \\times 9 - 2 \\times 13\n\\]\n\\[\n9 = 22 - 13\n\\]\n\\[\n1 = 3(22 - 13) - 2 \\times 13 = 3 \\times 22 - 5 \\times 13\n\\]\n\nThus, the inverse",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "How many ordered triples of integers $(a,b,c)$, with $a \\geq 2$, $b \\geq 1$, and",
+        "expected": "C",
+        "prediction": "^{0} + 0 = 2005 \\implies a + 1 = 2005 \\implies a = 2004.\n   \\]\n   Then, \\(b = a^{0} = 1\\), so the triple is \\((2004, 1, 0)\\).\n\n2. **Case \\(c = 1\\):**\n   \\[\n   a + a^{1} + 1 = 2005 \\implies a + a + 1 = 2005 \\implies 2a + 1 = 2005 \\implies 2a = 2004 \\implies a = 1002.\n   \\]\n   Then, \\(b = a^{1} = 1002",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "Let $S$ be the set of all positive integer divisors of $100,000.$ How many numbe",
+        "expected": "C",
+        "prediction": "of the form \\( d \\times d \\).\n\nThe divisors of \\( 100,000 \\) that are perfect squares are of the form \\( 2^a \\times 5^b \\) where both \\( a \\) and \\( b \\) are even. The possible values for \\( a \\) and \\( b \\) are 0, 2, and 4. Thus, there are:\n\\[\n3 \\times 3 = 9\n\\]\nperfect square divisors of \\( 100,000",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 2.812875509262085
+        }
+      },
+      {
+        "problem": "Let $a > 0$, and let $P(x)$ be a polynomial with integer coefficients such that\n",
+        "expected": "B",
+        "prediction": "plies \\( c \\) must be even. Let \\( c = 2k \\), then:\n\n\\[\na = \\frac{105 \\times 2k}{2} = 105k\n\\]\n\nThe smallest positive integer \\( k \\) is 1, so the smallest possible value of \\( a \\) is:\n\n\\[\na = 105 \\times 1 = 105\n\\]\n\nThus, the smallest possible value of \\( a \\) is 105.\n\nFINAL ANSWER: \\textbf{(A)} 105",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.8080950975418091
+        }
+      },
+      {
+        "problem": "Two non-congruent triangles have the same area. Each triangle has sides of lengt",
+        "expected": "C",
+        "prediction": " area, the expression inside the square root must be the same for two different integer values of \\(x\\).\n\nThe triangle inequality must also be satisfied for each triangle:\n\n1. \\(8 + 9 > x\\) implies \\(x < 17\\)\n2. \\(8 + x > 9\\) implies \\(x > 1\\)\n3. \\(9 + x > 8\\) implies \\(x > -1\\)\n\nThus, \\(2 \\leq x < ",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 3.7382588386535645
+        }
+      },
+      {
+        "problem": "The number $21!=51,090,942,171,709,440,000$ has over $60,000$ positive integer d",
+        "expected": "B",
+        "prediction": "^8 \\times 5^4 \\times 7^2 \\times 11 \\times 13 \\times 17 \\times 19. \\]\n\nThe number of odd divisors is:\n\n\\[\n(8+1)(4+1)(2+1)(1+1)(1+1)(1+1)(1+1) = 9 \\times 5 \\times 3 \\times 2 \\times 2 \\times 2 \\times 2.\n\\]\n\nCalculating this product:\n\n\\[\n9 \\times 5 = 45,\n\\]\n\\[\n45 \\times 3 = 135,\n\\]\n\\[\n135 \\times 2 = 270",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.8890057802200317
+        }
+      }
+    ]
+  }
+]

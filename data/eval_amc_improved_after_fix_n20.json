@@ -1,0 +1,274 @@
+[
+  {
+    "label": "AMC [mcts+ppm]",
+    "strategy": "mcts+ppm",
+    "correct": 19,
+    "total": 20,
+    "accuracy": 0.95,
+    "avg_api_calls": 5.0,
+    "errors": 0,
+    "elapsed_s": 200.3,
+    "results": [
+      {
+        "problem": "Betsy designed a flag using blue triangles, small white squares, and a red cente",
+        "expected": "A",
+        "prediction": "ies \\(40 = 8\\), which is false.\n- **Option B:** \\(W = R\\) implies \\(8 = 16\\), which is false.\n- **Option C:** \\(B = R\\) implies \\(40 = 16\\), which is false.\n- **Option D:** \\(3B = 2R\\) implies \\(3 \\times 40 = 2 \\times 16\\), which simplifies to \\(120 = 32\\), which is false.\n- **Option E:** \\(2R = W\\)",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 1.5788462162017822
+        }
+      },
+      {
+        "problem": "Let $S$ be the set of points $(x,y)$ in the coordinate plane such that two of th",
+        "expected": "E",
+        "prediction": "For \\( 3 \\leq x+2 \\):\n   \\[\n   x \\geq 1\n   \\]\n   This describes the line \\( y = x + 6 \\) for \\( x \\geq 1 \\).\n\nNow, let's summarize the findings:\n\n- The vertical line \\( x = 1 \\) for \\( y \\leq 7 \\).\n- The horizontal line \\( y = 7 \\) for \\( x \\leq 1 \\).\n- The line \\( y = x + 6 \\) for \\( x \\geq 1 \\).\n\n",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.4529251456260681
+        }
+      },
+      {
+        "problem": "The product of three integers is $60$. What is the least possible positive sum o",
+        "expected": "B",
+        "prediction": "must be positive to make the overall product positive. Let's try:\n   - \\(a = -1\\), \\(b = -2\\), \\(c = 30\\): \\((-1) \\times (-2) \\times 30 = 60\\), sum = \\(-1 - 2 + 30 = 27\\).\n   - \\(a = -1\\), \\(b = -3\\), \\(c = 20\\): \\((-1) \\times (-3) \\times 20 = 60\\), sum = \\(-1 - 3 + 20 = 16\\).\n   - \\(a = -2\\), \\(b =",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 3.910689115524292
+        }
+      },
+      {
+        "problem": "A regular pentagon with area $\\sqrt{5}+1$ is printed on paper and cut out. The f",
+        "expected": "B",
+        "prediction": " = \\frac{(\\sqrt{5}-1)^2}{4}\n\\]\n\nCalculating \\((\\sqrt{5}-1)^2\\):\n\n\\[\n(\\sqrt{5}-1)^2 = (\\sqrt{5})^2 - 2 \\cdot \\sqrt{5} \\cdot 1 + 1^2 = 5 - 2\\sqrt{5} + 1 = 6 - 2\\sqrt{5}\n\\]\n\nThus, the area ratio is:\n\n\\[\n\\frac{6 - 2\\sqrt{5}}{4} = \\frac{3 - \\sqrt{5}}{2}\n\\]\n\nThe area of the original pentagon is \\(\\sqrt{5}",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 1.2475802898406982
+        }
+      },
+      {
+        "problem": "At Rachelle's school an A counts 4 points, a B 3 points, a C 2 points, and a D 1",
+        "expected": "D",
+        "prediction": "English B = \\( \\frac{1}{4} \\)\n  - Probability of History B = \\( \\frac{1}{3} \\)\n  - Combined probability = \\( \\frac{1}{4} \\times \\frac{1}{3} = \\frac{1}{12} \\)\n\n- **Probability of English: C, History: A**\n  - Probability of English C = \\( 1 - \\frac{1}{6} - \\frac{1}{4} = \\frac{7}{12} \\)\n  - Probability",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 2.945265531539917
+        }
+      },
+      {
+        "problem": "For real numbers $a$ and $b$, define $a$\\$$b = (a - b)^2$. What is $(x - y)^2$\\$",
+        "expected": "A",
+        "prediction": ")\\), so:\n\\[\n(y - x)^2 = (-(x - y))^2 = (x - y)^2\n\\]\n\nThus, we have:\n\\[\na - b = (x - y)^2 - (x - y)^2 = 0\n\\]\n\nTherefore, \\((a - b)^2 = 0^2 = 0\\).\n\nThus, the value of \\((x - y)^2\\$\\$(y - x)^2\\) is:\n\\[\n((x - y)^2 - (y - x)^2)^2 = 0\n\\]\n\nThe correct answer is \\(\\boxed{0}\\).\n\nFINAL ANSWER: \\textbf{(A)}\\ 0",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 3.813706874847412
+        }
+      },
+      {
+        "problem": "Joy has $30$ thin rods, one each of every integer length from $1 \\text{ cm}$ thr",
+        "expected": "B",
+        "prediction": "rom our count.\n\nCounting the integers from \\(6\\) to \\(24\\), we have:\n\\[ 24 - 6 + 1 = 19 \\]\n\nSince \\(7\\) is included in this count, we exclude it, leaving us with:\n\\[ 19 - 1 = 18 \\]\n\nTherefore, Joy can choose from 18 different rods to form a quadrilateral with positive area.\n\nFINAL ANSWER: \\textbf{(C",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 3.688798666000366
+        }
+      },
+      {
+        "problem": "Driving at a constant speed, Sharon usually takes $180$ minutes to drive from he",
+        "expected": "B",
+        "prediction": "ation. First, multiply through by \\( 3v(v - 20) \\) to clear the denominators:\n\\[\nd(v - 20) + 2dv = 4.6 \\times 3v(v - 20)\n\\]\n\nSimplify the left side:\n\\[\ndv - 20d + 2dv = 3dv - 20d\n\\]\n\nCombine like terms:\n\\[\n3dv - 20d = 4.6 \\times 3v(v - 20)\n\\]\n\nNow, substitute \\( d = 3v \\) from the usual condition:\n\\",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "For each real number $a$ with $0 \\leq a \\leq 1$, let numbers $x$ and $y$ be chos",
+        "expected": "B",
+        "prediction": "er the ranges of \\(x\\) and \\(y\\):\n\n- \\(x \\in [0, a]\\)\n- \\(y \\in [0, 1]\\)\n\nThe cosine function is positive in the first and fourth quadrants and negative in the second and third quadrants. Therefore, \\(\\cos(2\\pi x)\\) is negative when \\(x \\in \\left(\\frac{1}{4}, \\frac{3}{4}\\right)\\) and \\(\\cos(2\\pi y)\\",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 2.058448314666748
+        }
+      },
+      {
+        "problem": "Jason rolls three fair standard six-sided dice. Then he looks at the rolls and c",
+        "expected": "A",
+        "prediction": "le to achieve a sum of 7 with a high probability. Let's analyze each possible value of the third die:\n\n- **If one die shows 1:** The other two dice must sum to 6. Possible pairs are (1, 5), (2, 4), (3, 3), (4, 2), (5, 1). There are 5 successful outcomes out of 36 possible outcomes when rerolling two",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 3.5128297805786133
+        }
+      },
+      {
+        "problem": "Raashan, Sylvia, and Ted play the following game. Each starts with $\\$1$. A bell",
+        "expected": "B",
+        "prediction": "s, and the player with \\$1 gives \\$1 to one of the other two players.\n   - There are 4 possible outcomes, depending on who the players give their money to.\n   - The probability of returning to (1, 1, 1) is \\(\\frac{1}{4}\\) (both players give to the player with \\$0).\n   - The probability of staying in",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 3.6030185222625732
+        }
+      },
+      {
+        "problem": "A frog sitting at the point $(1, 2)$ begins a sequence of jumps, where each jump",
+        "expected": "B",
+        "prediction": "x+1, y) + P(x-1, y) + P(x, y+1) + P(x, y-1) \\right)\n\\]\n\n### Solving the System\nWe need to solve for \\(P(1, 2)\\) using the recursive relation and boundary conditions.\n\n1. **Boundary Values:**\n   - \\(P(0, y) = 1\\) for \\(y = 1, 2, 3\\)\n   - \\(P(4, y) = 1\\) for \\(y = 1, 2, 3\\)\n   - \\(P(x, 0) = 0\\) for \\(",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "Two is $10 \\%$ of $x$ and $20 \\%$ of $y$. What is $x - y$?\n\n$\\textbf{(A) } 1 \\qq",
+        "expected": "D",
+        "prediction": "= \\frac{2}{0.1} = 20\n\\]\n\n**Solving for \\(y\\):**\n\nFrom the equation \\(0.2y = 2\\), we can solve for \\(y\\) by dividing both sides by \\(0.2\\):\n\\[\ny = \\frac{2}{0.2} = 10\n\\]\n\nNow, we need to find \\(x - y\\):\n\\[\nx - y = 20 - 10 = 10\n\\]\n\nThus, the value of \\(x - y\\) is 10.\n\nFINAL ANSWER: \\(\\textbf{(D) } 10\\)",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 3.5876729488372803
+        }
+      },
+      {
+        "problem": "The ''tower function of twos'' is defined recursively as follows: $T(1) = 2$ and",
+        "expected": "E",
+        "prediction": " - \\( A \\) is a power tower of 2's of height \\( T(2009) + 1 \\).\n\n3. **Estimate \\( B = (T(2009))^A \\):**\n   - \\( B \\) is a power tower of 2's of height \\( A + 1 \\).\n\n### Step 5: Determine \\( k \\)\n\nTo find the largest \\( k \\) such that the iterated logarithm is defined, we need:\n\\[\n\\log_2\\log_2\\log_2\\",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.41558387875556946
+        }
+      },
+      {
+        "problem": "Positive integers $x$ and $y$ satisfy the equation $57x+22y = 400$. What is the ",
+        "expected": "E",
+        "prediction": "= 13 - 9 \\quad \\Rightarrow \\quad 1 = 9 - 2(13 - 9) = 3 \\times 9 - 2 \\times 13\n\\]\n\\[\n9 = 22 - 13 \\quad \\Rightarrow \\quad 1 = 3(22 - 13) - 2 \\times 13 = 3 \\times 22 - 5 \\times 13\n\\]\n\\[\n13 = 57 - 2 \\times 22 \\quad \\Rightarrow \\quad 1 = 3 \\times 22 - 5(57 - 2 \\times 22) = 13 \\times 22 - 5 \\times 57\n\\]\n\n",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "How many ordered triples of integers $(a,b,c)$, with $a \\geq 2$, $b \\geq 1$, and",
+        "expected": "C",
+        "prediction": " = a^{c^{2005}}\\) becomes extremely large, making it impossible for \\(a + b + c = 2005\\) to hold, as \\(b\\) alone would exceed 2005.\n\nThus, there are no solutions for \\(c \\geq 2\\).\n\n### Conclusion\n\nThe only solutions are for \\(c = 0\\) and \\(c = 1\\), giving us two solutions:\n\n1. \\((a, b, c) = (2004, 1",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "Let $S$ be the set of all positive integer divisors of $100,000.$ How many numbe",
+        "expected": "C",
+        "prediction": "ues for \\( a_1 + a_2 \\) and \\( b_1 + b_2 \\) are:\n\n- \\( a_1 + a_2 \\) ranges from 0 to 10\n- \\( b_1 + b_2 \\) ranges from 0 to 10\n\nThe total number of combinations for \\( (a_1 + a_2, b_1 + b_2) \\) is \\( 11 \\times 11 = 121 \\).\n\nHowever, we must exclude the cases where \\( a_1 + a_2 = 0 \\) and \\( b_1 + b_2",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "Let $a > 0$, and let $P(x)$ be a polynomial with integer coefficients such that\n",
+        "expected": "B",
+        "prediction": "\n\n\\[\nQ(x) \\cdot A(x) + a = R(x) \\cdot B(x) - a \\implies Q(x) \\cdot A(x) + R(x) \\cdot B(x) = 2a\n\\]\n\nThus, \\( 2a \\) is a multiple of the least common multiple of \\( Q(x) \\) and \\( R(x) \\).\n\nThe degree of both \\( Q(x) \\) and \\( R(x) \\) is 4, and they are both monic polynomials. The polynomial \\( Q(x) \\",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "Two non-congruent triangles have the same area. Each triangle has sides of lengt",
+        "expected": "C",
+        "prediction": "st be the same for both triangles. We need to find integer values of \\(x\\) such that the triangles are non-congruent and have the same area.\n\nThe triangle inequality must hold for both triangles:\n\n1. \\(8 + 9 > x\\) implies \\(x < 17\\)\n2. \\(8 + x > 9\\) implies \\(x > 1\\)\n3. \\(9 + x > 8\\) implies \\(x > -",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 1.850692868232727
+        }
+      },
+      {
+        "problem": "The number $21!=51,090,942,171,709,440,000$ has over $60,000$ positive integer d",
+        "expected": "B",
+        "prediction": "ider the divisors that do not include the factor of 2. This is equivalent to finding the number of divisors of the number obtained by removing \\(2^{18}\\) from \\(21!\\), i.e., the number of divisors of:\n\n\\[\n3^a \\times 5^b \\times 7^c \\times 11^d \\times 13^e \\times 17^f \\times 19^g\n\\]\n\nThe number of odd",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 4,
+          "best_reward": 2.6208102703094482
+        }
+      }
+    ]
+  }
+]

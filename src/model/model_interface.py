@@ -4,6 +4,7 @@ Interface for different LLM implementations
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 import json
+import os
 from pathlib import Path
 from dataclasses import dataclass
 from openai import OpenAI
@@ -29,8 +30,14 @@ class LocalEmbedder:
             raise ImportError(
                 "sentence-transformers not installed. Run: pip install sentence-transformers"
             )
-        self._model = SentenceTransformer(model_name)
+        try:
+            self._model = SentenceTransformer(model_name, local_files_only=True)
+        except TypeError:
+            self._model = SentenceTransformer(model_name)
+        except Exception:
+            self._model = SentenceTransformer(model_name)
         self.dim: int = self._model.get_sentence_embedding_dimension()
+        self._cache: Dict[str, List[float]] = {}
 
     @classmethod
     def get(cls, model_name: str = "all-MiniLM-L6-v2") -> "LocalEmbedder":
@@ -40,14 +47,27 @@ class LocalEmbedder:
         return cls._instances[model_name]
 
     def embed_text(self, text: str) -> List[float]:
-        return self._model.encode(text, convert_to_numpy=True).tolist()
+        key = str(text)
+        if key not in self._cache:
+            self._cache[key] = self._model.encode(key, convert_to_numpy=True).tolist()
+        return self._cache[key]
+
+    def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        keys = [str(text) for text in texts]
+        missing = [key for key in dict.fromkeys(keys) if key not in self._cache]
+        if missing:
+            embeddings = self._model.encode(missing, convert_to_numpy=True)
+            for key, embedding in zip(missing, embeddings):
+                self._cache[key] = embedding.tolist()
+        return [self._cache[key] for key in keys]
 
 @dataclass
 class ModelConfig:
     model: str
-    temperature: float = 0.7
+    temperature: float = 0.0
     max_tokens: int = 1000
     timeout: float = 30.0
+    reasoning_effort: Optional[str] = None
 
 class LLMInterface(ABC):
     @abstractmethod
@@ -77,7 +97,13 @@ class LLMInterface(ABC):
 class OpenAIModel(LLMInterface):
     def __init__(self, api_key: str, config: Optional[ModelConfig] = None):
         self.api_key = api_key
-        self.config = config or ModelConfig(model="gpt-4o-mini")
+        self.config = config or ModelConfig(
+            model=os.getenv("OPENAI_MODEL", "gpt-5.2"),
+            temperature=0.0,
+            max_tokens=1800,
+            timeout=60.0,
+            reasoning_effort=os.getenv("OPENAI_REASONING_EFFORT", "high"),
+        )
         self.client = OpenAI(api_key=api_key, timeout=self.config.timeout, max_retries=0)
 
     @classmethod
@@ -93,13 +119,29 @@ class OpenAIModel(LLMInterface):
                          temperature: Optional[float] = None,
                          max_tokens: Optional[int] = None) -> str:
         """Generate a response using OpenAI API."""
-        response = self.client.chat.completions.create(
-            model=self.config.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature if temperature is not None else self.config.temperature,
-            max_tokens=max_tokens or self.config.max_tokens
-        )
-        return response.choices[0].message.content
+        completion_budget = max_tokens or self.config.max_tokens
+        if self._supports_reasoning_effort():
+            completion_budget = max(completion_budget, 2500)
+
+        reasoning_effort = (self.config.reasoning_effort or "").strip().lower()
+        supports_reasoning = self._supports_reasoning_effort()
+
+        request: Dict[str, Any] = {
+            "model": self.config.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_completion_tokens": completion_budget,
+        }
+        if not (supports_reasoning and reasoning_effort and reasoning_effort != "none"):
+            request["temperature"] = temperature if temperature is not None else self.config.temperature
+        if supports_reasoning and reasoning_effort:
+            request["reasoning_effort"] = reasoning_effort
+
+        response = self.client.chat.completions.create(**request)
+        return response.choices[0].message.content or ""
+
+    def _supports_reasoning_effort(self) -> bool:
+        model = self.config.model.lower()
+        return model.startswith(("gpt-5", "o1", "o3", "o4"))
 
     def evaluate_reasoning(self,
                           problem: str,
@@ -327,11 +369,12 @@ class ModelFactory:
             elif name == "deepseek":
                 return DeepSeekModel.from_config_file(config_path, api_key)
         else:
+            config = kwargs.get("config")
             if name == "openai":
-                return OpenAIModel(api_key)
+                return OpenAIModel(api_key, config=config)
             elif name == "anthropic":
-                return AnthropicModel(api_key)
+                return AnthropicModel(api_key, config=config)
             elif name == "deepseek":
-                return DeepSeekModel(api_key)
+                return DeepSeekModel(api_key, config=config)
 
         raise ValueError(f"Unknown model type: {model_type}. Choose from: openai, anthropic, deepseek, ollama")

@@ -60,6 +60,7 @@ _API_KEY_ENVS: Dict[str, str] = {
 
 def extract_preference_pairs(
     trajectory: List[Dict[str, Any]],
+    problem: str = "",
     preferred_threshold: float = 0.6,
     non_preferred_threshold: float = 0.35,
 ) -> List[Dict[str, str]]:
@@ -68,8 +69,8 @@ def extract_preference_pairs(
     A step is "preferred" if its node value is high (the search found it
     promising) and "non_preferred" if its value is low.
     """
-    preferred: List[str] = []
-    non_preferred: List[str] = []
+    preferred: List[Dict[str, float | str]] = []
+    non_preferred: List[Dict[str, float | str]] = []
 
     for entry in trajectory:
         action = (entry.get("action") or "").strip()
@@ -77,15 +78,21 @@ def extract_preference_pairs(
         if not action:
             continue
         if value >= preferred_threshold:
-            preferred.append(action)
+            preferred.append({"step": action, "reward": value})
         elif value <= non_preferred_threshold:
-            non_preferred.append(action)
+            non_preferred.append({"step": action, "reward": value})
 
     pairs: List[Dict[str, str]] = []
     for p in preferred:
         for np in non_preferred:
-            if p != np:
-                pairs.append({"preferred": p, "non_preferred": np})
+            if p["step"] != np["step"]:
+                pairs.append({
+                    "problem": problem,
+                    "preferred": str(p["step"]),
+                    "non_preferred": str(np["step"]),
+                    "preferred_reward": float(p["reward"]),
+                    "non_preferred_reward": float(np["reward"]),
+                })
     return pairs
 
 
@@ -139,6 +146,7 @@ def collect(args: argparse.Namespace) -> None:
                 reward = float(mcts.last_stats.get("best_reward", 0.0))
                 pairs = extract_preference_pairs(
                     trajectory,
+                    problem=problem,
                     preferred_threshold=args.preferred_threshold,
                     non_preferred_threshold=args.non_preferred_threshold,
                 )

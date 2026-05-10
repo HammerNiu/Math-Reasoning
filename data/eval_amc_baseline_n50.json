@@ -1,0 +1,538 @@
+[
+  {
+    "label": "AMC [mcts]",
+    "strategy": "mcts",
+    "correct": 18,
+    "total": 50,
+    "accuracy": 0.36,
+    "avg_api_calls": 2.3,
+    "errors": 31,
+    "elapsed_s": 820.7,
+    "results": [
+      {
+        "problem": "Betsy designed a flag using blue triangles, small white squares, and a red cente",
+        "expected": "A",
+        "prediction": "e the areas \\(B\\), \\(W\\), and \\(R\\):\n\n- \\(B = 32\\)\n- \\(W = 16\\)\n- \\(R = 16\\)\n\nWe check the given options:\n\n- \\((A)\\ B = W\\) is false because \\(32 \\neq 16\\).\n- \\((B)\\ W = R\\) is true because \\(16 = 16\\).\n- \\((C)\\ B = R\\) is false because \\(32 \\neq 16\\).\n- \\((D)\\ 3B = 2R\\) is false because \\(3 \\times ",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "Let $S$ be the set of points $(x,y)$ in the coordinate plane such that two of th",
+        "expected": "E",
+        "prediction": "ntersects the line \\(y = x + 6\\) at the point \\((1, 7)\\).\n- The line \\(y = 7\\) intersects the line \\(y = x + 6\\) at the point \\((1, 7)\\).\n\nAll three lines intersect at the single point \\((1, 7)\\).\n\nThus, the set \\(S\\) is described by a single point.\n\nFINAL ANSWER: \\textbf{(A)}\\ \\text{a single point}",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "The product of three integers is $60$. What is the least possible positive sum o",
+        "expected": "B",
+        "prediction": "17\n   \\]\n\n6. **Combination: 2, 2, 15**\n   \\[\n   2 \\times 2 \\times 15 = 60, \\quad \\text{Sum} = 2 + 2 + 15 = 19\n   \\]\n\n7. **Combination: 1, 4, 15**\n   \\[\n   1 \\times 4 \\times 15 = 60, \\quad \\text{Sum} = 1 + 4 + 15 = 20\n   \\]\n\n8. **Combination: 1, 3, 20**\n   \\[\n   1 \\times 3 \\times 20 = 60, \\quad \\text",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "A regular pentagon with area $\\sqrt{5}+1$ is printed on paper and cut out. The f",
+        "expected": "B",
+        "prediction": "sqrt{5}\n\\]\n\nSubstitute back:\n\n\\[\n(25 + 10\\sqrt{5}) s^4 = 16(6 + 2\\sqrt{5})\n\\]\n\nSimplify the right side:\n\n\\[\n16(6 + 2\\sqrt{5}) = 96 + 32\\sqrt{5}\n\\]\n\nNow, equate and solve for \\( s^4 \\):\n\n\\[\n(25 + 10\\sqrt{5}) s^4 = 96 + 32\\sqrt{5}\n\\]\n\nDivide both sides by \\( 25 + 10\\sqrt{5} \\):\n\n\\[\ns^4 = \\frac{96 + 32",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "At Rachelle's school an A counts 4 points, a B 3 points, a C 2 points, and a D 1",
+        "expected": "D",
+        "prediction": "bility of A in English = \\(\\frac{1}{6}\\)\n  - Probability of C in History = \\(1 - \\frac{1}{4} - \\frac{1}{3} = \\frac{5}{12}\\)\n  - Combined probability = \\(\\frac{1}{6} \\times \\frac{5}{12} = \\frac{5}{72}\\)\n\n- **Probability of B in English and B in History:**\n  - Probability of B in English = \\(\\frac{1}{",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "For real numbers $a$ and $b$, define $a$\\$$b = (a - b)^2$. What is $(x - y)^2$\\$",
+        "expected": "A",
+        "prediction": "otice that \\((y - x) = -(x - y)\\). Therefore, \\((y - x)^2 = (-(x - y))^2 = (x - y)^2\\).\n\nThus, we have:\n\\[\na - b = (x - y)^2 - (x - y)^2 = 0.\n\\]\n\nNow, apply the operation:\n\\[\na\\$\\$b = (a - b)^2 = 0^2 = 0.\n\\]\n\nTherefore, the value of \\((x - y)^2\\$\\$(y - x)^2\\) is 0.\n\nFINAL ANSWER: \\(\\textbf{(A)}\\ 0\\)",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "Joy has $30$ thin rods, one each of every integer length from $1 \\text{ cm}$ thr",
+        "expected": "B",
+        "prediction": "s are 3, 7, 15. The candidate rod length ranges from 1 to 30, excluding rods already used.\nSTEP: Valid remaining candidate lengths: 6, 8-14, 16-24.\nSTEP: Rejected remaining candidate lengths: 1-2, 4-5, 25-30.\nSTEP: Therefore 17 remaining rods can be chosen to form the quadrilateral.\nFINAL ANSWER: 17",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 0,
+          "exact_solver": "rod polygon side-inequality exact count"
+        }
+      },
+      {
+        "problem": "Driving at a constant speed, Sharon usually takes $180$ minutes to drive from he",
+        "expected": "B",
+        "prediction": "act 1 from both sides:\n\n\\[\n\\frac{2s}{s - 20} = 3.6\n\\]\n\nCross-multiply to solve for \\( s \\):\n\n\\[\n2s = 3.6(s - 20)\n\\]\n\nDistribute the 3.6:\n\n\\[\n2s = 3.6s - 72\n\\]\n\nRearrange the terms:\n\n\\[\n72 = 3.6s - 2s\n\\]\n\n\\[\n72 = 1.6s\n\\]\n\nSolve for \\( s \\):\n\n\\[\ns = \\frac{72}{1.6} = 45\n\\]\n\nNow that we have \\( s = 45 \\",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "For each real number $a$ with $0 \\leq a \\leq 1$, let numbers $x$ and $y$ be chos",
+        "expected": "B",
+        "prediction": "0, \\sin^2{(\\pi a)}]\\) and the range of \\(\\sin^2{(\\pi y)}\\) is \\([0, 1]\\).\n\nThe condition \\(\\sin^2{(\\pi x)} + \\sin^2{(\\pi y)} > 1\\) implies:\n\\[\n\\sin^2{(\\pi y)} > 1 - \\sin^2{(\\pi x)}\n\\]\n\nFor a fixed \\(x\\), \\(\\sin^2{(\\pi y)}\\) must be greater than \\(1 - \\sin^2{(\\pi x)}\\). The probability that \\(\\sin^2{",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "Jason rolls three fair standard six-sided dice. Then he looks at the rolls and c",
+        "expected": "A",
+        "prediction": "r, rerolling two dice is not optimal because it reduces the probability of achieving a sum of 7.\n   - **Sum is 8**: If the sum is 8, Jason can reroll one die to try to get a 1. Again, rerolling two dice is not optimal.\n   - **Sum is 9**: If the sum is 9, Jason can reroll one die to try to get a 2. R",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "Raashan, Sylvia, and Ted play the following game. Each starts with $\\$1$. A bell",
+        "expected": "B",
+        "prediction": " one who receives two dollars). For each outcome, the probability is:\n  \\[\n  \\left(\\frac{1}{2}\\right)^3 = \\frac{1}{8}\n  \\]\n  Since there are 3 such outcomes, the total probability for this scenario is:\n  \\[\n  3 \\times \\frac{1}{8} = \\frac{3}{8}\n  \\]\n\nThe total probability of all scenarios must sum to",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "A frog sitting at the point $(1, 2)$ begins a sequence of jumps, where each jump",
+        "expected": "B",
+        "prediction": "of the four neighboring points:\n\\[\np(x, y) = \\frac{1}{4} \\left( p(x-1, y) + p(x+1, y) + p(x, y-1) + p(x, y+1) \\right)\n\\]\n\n**Calculating \\(p(1, 2)\\):**\n1. **\\(p(0, 2)\\):** Since \\((0, 2)\\) is on the vertical side, \\(p(0, 2) = 1\\).\n2. **\\(p(2, 2)\\):** We need to calculate this probability.\n3. **\\(p(1,",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "Two is $10 \\%$ of $x$ and $20 \\%$ of $y$. What is $x - y$?\n\n$\\textbf{(A) } 1 \\qq",
+        "expected": "D",
+        "prediction": "\\(x\\) from the first equation:\n\\[\n0.1x = 2 \\implies x = \\frac{2}{0.1} = 20\n\\]\n\nNext, solve for \\(y\\) from the second equation:\n\\[\n0.2y = 2 \\implies y = \\frac{2}{0.2} = 10\n\\]\n\nNow, calculate \\(x - y\\):\n\\[\nx - y = 20 - 10 = 10\n\\]\n\nThus, the value of \\(x - y\\) is 10.\n\nFINAL ANSWER: \\(\\textbf{(D) } 10\\)",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "The ''tower function of twos'' is defined recursively as follows: $T(1) = 2$ and",
+        "expected": "E",
+        "prediction": "fying \\( \\log_2 A \\)\n\nNext, consider:\n\\[\n\\log_2 A = \\log_2((T(2009))^{T(2009)}) = T(2009) \\cdot \\log_2(T(2009))\n\\]\n\n#### Step 3.3: Simplifying \\( \\log_2 T(2009) \\)\n\nSince \\( T(2009) \\) is a tower of 2's of height 2009, we have:\n\\[\n\\log_2 T(2009) = T(2008)\n\\]\n\n#### Step 3.4: Continuing the Logarithms",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "Positive integers $x$ and $y$ satisfy the equation $57x+22y = 400$. What is the ",
+        "expected": "E",
+        "prediction": "1 \\times 9 + 4\n\\]\n\\[\n9 = 2 \\times 4 + 1\n\\]\n\\[\n4 = 4 \\times 1 + 0\n\\]\n\nBack-substituting to express 1 as a linear combination of 22 and 13:\n\n\\[\n1 = 9 - 2 \\times 4\n\\]\n\\[\n4 = 13 - 9 \\quad \\Rightarrow \\quad 1 = 9 - 2(13 - 9) = 3 \\times 9 - 2 \\times 13\n\\]\n\\[\n9 = 22 - 13 \\quad \\Rightarrow \\quad 1 = 3(22 - ",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "How many ordered triples of integers $(a,b,c)$, with $a \\geq 2$, $b \\geq 1$, and",
+        "expected": "C",
+        "prediction": " \\[\n  2a = 2004 \\implies a = 1002.\n  \\]\n\n  Substituting back, we have \\(b = 1002\\) and \\(c = 1\\), which satisfies all conditions.\n\n- If \\(c \\geq 2\\), then \\(c^{2005} \\geq 2^{2005}\\), making \\(b = a^{c^{2005}}\\) extremely large. This would make \\(a + b + c\\) exceed 2005, as \\(b\\) would be much larger",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "Let $S$ be the set of all positive integer divisors of $100,000.$ How many numbe",
+        "expected": "C",
+        "prediction": "000^2\\). There are 36 such squares because there are 36 divisors of \\(100,000\\).\n\nThe number of products \\(d_1 \\times d_2\\) where \\(d_1\\) and \\(d_2\\) are distinct is:\n\n\\[\n121 - 36 = 85.\n\\]\n\nHowever, we need to count each product \\(d_1 \\times d_2\\) only once, regardless of the order of \\(d_1\\) and \\(",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "Let $a > 0$, and let $P(x)$ be a polynomial with integer coefficients such that\n",
+        "expected": "B",
+        "prediction": "\n\n\\[\nQ(2) = (1)(-1)(-3)(-5) = 15 \\Rightarrow 15R(2) = -2a\n\\]\n\\[\nQ(4) = (3)(1)(-1)(-3) = 9 \\Rightarrow 9R(4) = -2a\n\\]\n\\[\nQ(6) = (5)(3)(1)(-1) = -15 \\Rightarrow -15R(6) = -2a\n\\]\n\\[\nQ(8) = (7)(5)(3)(1) = 105 \\Rightarrow 105R(8) = -2a\n\\]\n\nFrom these equations, we have:\n\n\\[\n15R(2) = 9R(4) = 15R(6) = 105R",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.5
+        }
+      },
+      {
+        "problem": "Two non-congruent triangles have the same area. Each triangle has sides of lengt",
+        "expected": "C",
+        "prediction": "les with the same area have supplementary included angles, so their third-side lengths c and d satisfy c^2 + d^2 = 2(8^2 + 9^2) = 290.\nSTEP: Triangle inequality gives integer third sides from 2 to 16. Within this range, the pair is 11 and 13.\nSTEP: The requested sum is 11 + 13 = 24.\nFINAL ANSWER: 24",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {
+          "api_calls": 0,
+          "exact_solver": "same-area triangle third-side exact solver"
+        }
+      },
+      {
+        "problem": "The number $21!=51,090,942,171,709,440,000$ has over $60,000$ positive integer d",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Bertha has $6$ daughters and no sons. Some of her daughters have $6$ daughters, ",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "What is the area of the shaded region of the given $8\\times 5$ rectangle?\n\n```as",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Two parabolas have equations $y= x^2 + ax +b$ and $y= x^2 + cx +d$, where $a$, $",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A circle has been divided into 6 sectors of different sizes. Then 2 of the secto",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "The base of the pentahedron shown below is a $13 \\times 8$ rectangle, and its la",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "In $\\triangle ABC$, $\\angle ABC=45^\\circ$. Point $D$ is on $\\overline{BC}$ so th",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A set of teams held a round-robin tournament in which every team played every ot",
+        "expected": "A",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Let $N=123456789101112\\dots4344$ be the $79$-digit number that is formed by writ",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A bug travels in the coordinate plane, moving only along the lines that are para",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A $3-4-5$ right triangle is inscribed in circle $A$, and a $5-12-13$ right trian",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "On a trip from the United States to Canada, Isabella took $d$ U.S. dollars. At t",
+        "expected": "A",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Three mutually tangent spheres of radius $1$ rest on a horizontal plane. A spher",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Let $ABCD$ be a square. Let $E, F, G$ and $H$ be the centers, respectively, of e",
+        "expected": "B",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A sequence of numbers is defined recursively by $a_1 = 1$, $a_2 = \\frac{3}{7}$, ",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Tetrahedron $ABCD$ has $AB=5,AC=3,BC=4,BD=4,AD=3,$ and $CD=\\frac{12}{5}\\sqrt{2}$",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Rhombus $ABCD$ is similar to rhombus $BFDE$. The area of rhombus $ABCD$ is 24, a",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Let $f(x) = \\sin{x} + 2\\cos{x} + 3\\tan{x}$, using radian measure for the variabl",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "At the beginning of the school year, $50\\%$ of all students in Mr. Wells' math c",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Triangle $ABC$ has $AC=3$, $BC=4$, and $AB=5$. Point $D$ is on $\\overline{AB}$, ",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Real numbers $x$ and $y$ are chosen independently and uniformly at random from t",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A traffic light runs repeatedly through the following cycle: green for $30$ seco",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Which of the following describes the largest subset of values of $y$ within the ",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "For every real number $x$, let $\\lfloor x\\rfloor$ denote the greatest integer no",
+        "expected": "A",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Suppose $a$ is $150\\%$ of $b$. What percent of $a$ is $3b$?\n\n$\\textbf{(A) } 50 \\",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Objects $A$ and $B$ move simultaneously in the coordinate plane via a sequence o",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "There are exactly $77,000$ ordered quadruplets $(a, b, c, d)$ such that $\\gcd(a,",
+        "expected": "D",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Consider the statement, \"If $n$ is not prime, then $n-2$ is prime.\" Which of the",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "Let $ABCD$ be a convex quadrilateral with $BC=2$ and $CD=6.$ Suppose that the ce",
+        "expected": "C",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "How many digits are in the base-ten representation of $8^5 \\cdot 5^{10} \\cdot 15",
+        "expected": "E",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      },
+      {
+        "problem": "A truncated cone has horizontal bases with radii $18$ and $2$. A sphere is tange",
+        "expected": "A",
+        "prediction": ": 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc_holdout50",
+        "stats": {}
+      }
+    ]
+  }
+]

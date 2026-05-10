@@ -1,0 +1,36 @@
+* 60b4369 (HEAD -> main, origin/main, origin/HEAD) member ones' tasks finished
+* 597221a member ones' tasks finished
+*   c190b40 Merge remote-tracking branch 'origin/main'
+|\  
+| * e204731 final
+| * bc8c386 final
+| *   087c9e7 Merge branch 'main' into ppm
+| |\  
+| * | 7ce46a3 ppm
+| * | 55990be ppm final
+* | | 6884bed member ones' tasks finished
+| |/  
+|/|   
+* | cda0f1e member ones' tasks finished
+* | b975ac6 Change eval.py usage examples for n parameter
+* | 2eaab0e Add files via upload
+* | 14c6ef4 Add files via upload
+|/  
+* 6df125d -
+* e33a264 final
+* 4376982 final
+* b9cb1e1 final
+* c0b89c2 member ones' tasks finished
+* 12e9068 Delete src/core/__init__.py
+* d25c3e6 Delete src/model/__init__.py
+* f0fea5c Delete config/__init__.py
+* 3b101f2 Add files via upload
+* f92e6b8 Create __init__.py
+* 2996487 Add files via upload
+* 5f5a02b Create __init__.py
+* a9d5148 Add files via upload
+* 6bb75f4 Add files via upload
+* 78afee7 Create __init__.py
+* 87b5fa2 Add files via upload
+* ea9231e Create __init__.py
+* 3d2fff7 Create __init__.py

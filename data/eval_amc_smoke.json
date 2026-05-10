@@ -1,0 +1,53 @@
+[
+  {
+    "label": "AMC [mcts+ppm]",
+    "strategy": "mcts+ppm",
+    "correct": 2,
+    "total": 3,
+    "accuracy": 0.6666666666666666,
+    "avg_api_calls": 5.0,
+    "errors": 0,
+    "elapsed_s": 179.3,
+    "results": [
+      {
+        "problem": "The windshield wiper on the driver's side of a large bus is depicted below.\n\n```",
+        "expected": "C",
+        "prediction": "",
+        "correct": false,
+        "subject": "amc",
+        "source": "amc12",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "A traffic light runs repeatedly through the following cycle: green for $30$ seco",
+        "expected": "D",
+        "prediction": "n \\((27,30)\\)\n- For \\(t=33\\): start in \\((30,33)\\)\n- For \\(t=63\\): start in \\((60,63)\\)\n\nThese three intervals have total length \\(3+3+3=9\\) seconds (they only touch at endpoints, which don’t affect probability).\n\nThus the probability is\n\\[\n\\frac{9}{63}=\\frac{1}{7}.\n\\]\n\nFINAL ANSWER: \\(\\frac{1}{7}\\)",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc12",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 2,
+          "best_reward": 0.0
+        }
+      },
+      {
+        "problem": "In the overlapping triangles $\\triangle{ABC}$ and $\\triangle{ABE}$ sharing commo",
+        "expected": "B",
+        "prediction": "t}(D,AE)\n=\\frac12\\cdot 8 \\cdot \\frac{16}{7}=\\frac{64}{7}.\n\\]\n\\[\n[ \\triangle BDC ]=\\frac12\\cdot BC \\cdot \\text{dist}(D,BC)\n=\\frac12\\cdot 6 \\cdot \\left(4-\\frac{16}{7}\\right)\n=\\frac12\\cdot 6 \\cdot \\frac{12}{7}=\\frac{36}{7}.\n\\]\nDifference:\n\\[\n\\frac{64}{7}-\\frac{36}{7}=\\frac{28}{7}=4.\n\\]\n\nFINAL ANSWER: 4",
+        "correct": true,
+        "subject": "amc",
+        "source": "amc12",
+        "stats": {
+          "api_calls": 5,
+          "ppm_pruned": 0,
+          "best_reward": 0.0
+        }
+      }
+    ]
+  }
+]

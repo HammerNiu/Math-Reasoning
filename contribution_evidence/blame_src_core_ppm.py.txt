@@ -1,0 +1,385 @@
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400   1) """
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400   2) Process Preference Model (PPM) for evaluating reasoning steps.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400   3) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400   4) Innovations over the baseline single-step encoder:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400   5)   1. ContextAwarePPM   — joint (problem, step) dual-encoder; scores steps
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400   6)                          relative to the problem being solved, not in isolation.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400   7)   2. Soft margin loss  — margin scales with the actual reward gap between pairs
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400   8)                          instead of a fixed constant of 1.0.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400   9)   3. Hard negative mining — per-batch, the highest-cosine-similarity
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  10)                             non-preferred steps are substituted to surface the
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  11)                             hardest confusing examples.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  12)   4. Dropout + gradient clipping — prevents overfitting on small training sets.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  13)   5. Cosine LR annealing — stable convergence without manual schedule tuning.
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  14) """
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  15) from __future__ import annotations
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  16) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  17) import json
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  18) from dataclasses import dataclass
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  19) from typing import Any, Dict, List, Optional, Tuple
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  20) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  21) import torch
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  22) import torch.nn as nn
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  23) import torch.nn.functional as F
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  24) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  25) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  26) # ── Config ────────────────────────────────────────────────────────────────────
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  27) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  28) @dataclass
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  29) class PPMConfig:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  30)     input_dim: int = 384
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  31)     hidden_dim: int = 256
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  32)     learning_rate: float = 0.001
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  33)     batch_size: int = 32
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  34)     # Innovation 4: regularization
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  35)     dropout_rate: float = 0.1
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  36)     # Innovation 5: cosine LR annealing
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  37)     use_scheduler: bool = True
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  38)     scheduler_T_max: int = 100
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  39)     # Innovation 3: hard negative mining
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  40)     use_hard_negatives: bool = True
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  41)     hard_negative_ratio: float = 0.3
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  42) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  43) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  44) # ── Building blocks ───────────────────────────────────────────────────────────
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  45) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  46) class StepEncoder(nn.Module):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  47)     def __init__(self, input_dim: int, hidden_dim: int, dropout_rate: float = 0.1):
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  48)         super().__init__()
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  49)         self.encoder = nn.Sequential(
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  50)             nn.Linear(input_dim, hidden_dim),
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  51)             nn.LayerNorm(hidden_dim),
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  52)             nn.ReLU(),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  53)             nn.Dropout(dropout_rate),
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  54)             nn.Linear(hidden_dim, hidden_dim),
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  55)             nn.LayerNorm(hidden_dim),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  56)             nn.ReLU(),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  57)             nn.Dropout(dropout_rate),
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  58)         )
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  59) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  60)     def forward(self, x: torch.Tensor) -> torch.Tensor:
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  61)         return self.encoder(x)
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  62) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  63) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  64) # ── Base model ────────────────────────────────────────────────────────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  65) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  66) class ProcessPreferenceModel(nn.Module):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  67)     """Step-only PPM (baseline).
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  68) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  69)     Encodes each reasoning step independently and predicts a quality score.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  70)     For context-sensitive scoring see ContextAwarePPM.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  71)     """
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  72) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  73)     def __init__(self, config: Optional[PPMConfig] = None):
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  74)         super().__init__()
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  75)         self.config = config or PPMConfig()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  76) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  77)         self.step_encoder = StepEncoder(
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  78)             self.config.input_dim,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  79)             self.config.hidden_dim,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  80)             dropout_rate=self.config.dropout_rate,
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  81)         )
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  82) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  83)         self.value_head = nn.Sequential(
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  84)             nn.Linear(self.config.hidden_dim, self.config.hidden_dim // 2),
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  85)             nn.LayerNorm(self.config.hidden_dim // 2),
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  86)             nn.ReLU(),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  87)             nn.Dropout(self.config.dropout_rate),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  88)             nn.Linear(self.config.hidden_dim // 2, 1),
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  89)         )
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  90) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  91)         self.optimizer = torch.optim.Adam(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  92)             self.parameters(), lr=self.config.learning_rate
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  93)         )
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  94) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  95)     @classmethod
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  96)     def from_config_file(cls, config_path: str) -> "ProcessPreferenceModel":
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  97)         with open(config_path, "r") as f:
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400  98)             config_data = json.load(f)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400  99)         config = PPMConfig(**config_data["ppm"])
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 100)         return cls(config)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 101) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 102)     def forward(self, x: torch.Tensor) -> torch.Tensor:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 103)         return self.value_head(self.step_encoder(x))
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 104) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 105)     # ── Embedding helpers ─────────────────────────────────────────────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 106) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 107)     def _embed_steps(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 108)         self,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 109)         steps: List[str],
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 110)         embedder: Any,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 111)         problems: Optional[List[str]] = None,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 112)     ) -> torch.Tensor:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 113)         """Embed a list of steps. `problems` is accepted for interface
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 114)         compatibility with ContextAwarePPM but is ignored here."""
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 115)         return torch.FloatTensor([embedder.embed_text(s) for s in steps])
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 116) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 117)     # ── Inference ─────────────────────────────────────────────────────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 118) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 119)     def evaluate_step(self, step: str, embedder: Any, problem: str = "") -> float:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 120)         """Score a single reasoning step.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 121) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 122)         `problem` is accepted for interface compatibility with ContextAwarePPM
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 123)         but unused in this base class — only the step text is encoded.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 124)         """
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 125)         self.eval()
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 126)         with torch.no_grad():
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 127)             tensor = torch.FloatTensor(embedder.embed_text(step)).unsqueeze(0)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 128)             return self(tensor).item()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 129) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 130)     # ── Training ──────────────────────────────────────────────────────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 131) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 132)     def train_step(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 133)         self,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 134)         preferred_steps: List[str],
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 135)         non_preferred_steps: List[str],
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 136)         embedder: Any,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 137)         preferred_rewards: Optional[List[float]] = None,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 138)         non_preferred_rewards: Optional[List[float]] = None,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 139)         problems: Optional[List[str]] = None,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 140)     ) -> float:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 141)         """One gradient step with soft reward-proportional margin loss (Innovation 2).
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 142) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 143)         Loss:  relu(v_neg − v_pos + margin).mean()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 144)           - No rewards supplied  → margin = 1.0  (original behavior)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 145)           - Rewards supplied     → margin = clamp(r_pos − r_neg, min=0.1)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 146)             Pairs with a larger quality gap contribute a larger margin,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 147)             making high-confidence preferences push harder during training.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 148)         """
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 149)         self.train()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 150) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 151)         pref_embs = self._embed_steps(preferred_steps, embedder, problems)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 152)         nonpref_embs = self._embed_steps(non_preferred_steps, embedder, problems)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 153) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 154)         if (
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 155)             self.config.use_hard_negatives
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 156)             and pref_embs.size(0) >= 4
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 157)             and nonpref_embs.size(0) >= 4
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 158)         ):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 159)             n_hard = max(1, int(pref_embs.size(0) * self.config.hard_negative_ratio))
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 160)             pref_embs, nonpref_embs = _apply_hard_negatives(pref_embs, nonpref_embs, n_hard)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 161) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 162)         pref_vals = self(pref_embs)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 163)         nonpref_vals = self(nonpref_embs)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 164) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 165)         # Reward-proportional margin
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 166)         if preferred_rewards and non_preferred_rewards:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 167)             n = min(len(preferred_rewards), len(non_preferred_rewards), pref_vals.size(0))
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 168)             margins = torch.FloatTensor(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 169)                 [max(0.1, preferred_rewards[i] - non_preferred_rewards[i]) for i in range(n)]
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 170)             ).unsqueeze(1)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 171)             if n < pref_vals.size(0):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 172)                 extra = torch.ones(pref_vals.size(0) - n, 1)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 173)                 margins = torch.cat([margins, extra], dim=0)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 174)         else:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 175)             margins = torch.ones(pref_vals.size(0), 1)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 176) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 177)         loss = F.relu(nonpref_vals - pref_vals + margins).mean()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 178) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 179)         self.optimizer.zero_grad()
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 180)         loss.backward()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 181)         torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 182)         self.optimizer.step()
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 183)         return loss.item()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 184) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 185)     # ── Persistence ───────────────────────────────────────────────────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 186) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 187)     def save_model(self, path: str) -> None:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 188)         torch.save(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 189)             {
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 190)                 "model_state_dict": self.state_dict(),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 191)                 "optimizer_state_dict": self.optimizer.state_dict(),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 192)                 "config": self.config,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 193)                 "class": self.__class__.__name__,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 194)             },
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 195)             path,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 196)         )
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 197) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 198)     def load_model(self, path: str) -> None:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 199)         checkpoint = torch.load(path, weights_only=False)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 200)         self.load_state_dict(checkpoint["model_state_dict"])
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 201)         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 202)         self.config = checkpoint["config"]
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 203) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 204) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 205) # ── Innovation 1: Context-Aware PPM ──────────────────────────────────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 206) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 207) class ContextAwarePPM(ProcessPreferenceModel):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 208)     """Context-Aware PPM: jointly encodes (problem, step) pairs (Innovation 1).
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 209) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 210)     Architecture
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 211)     ────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 212)       problem_emb (D) ──┐
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 213)                          ├─ concat → (2D) → StepEncoder(2D→H) → ValueHead(H→1)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 214)       step_emb    (D) ──┘
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 215) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 216)     Unlike the base PPM that scores steps in isolation, ContextAwarePPM
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 217)     conditions step quality on the specific problem being solved.  This lets
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 218)     the model distinguish steps that are valid in one context but irrelevant in
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 219)     another (e.g. chain rule is helpful for calculus, useless for combinatorics).
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 220) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 221)     Parameters
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 222)     ──────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 223)     embedding_dim : int
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 224)         Dimension of a single embedding vector (e.g. 384 for all-MiniLM-L6-v2).
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 225)         The PPM input_dim is automatically set to 2 × embedding_dim.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 226)     config : PPMConfig, optional
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 227)         All fields except input_dim are respected; input_dim is overridden.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 228)     """
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 229) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 230)     def __init__(self, embedding_dim: int = 384, config: Optional[PPMConfig] = None):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 231)         base = config or PPMConfig()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 232)         merged = PPMConfig(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 233)             input_dim=embedding_dim * 2,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 234)             hidden_dim=base.hidden_dim,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 235)             learning_rate=base.learning_rate,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 236)             batch_size=base.batch_size,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 237)             dropout_rate=base.dropout_rate,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 238)             use_scheduler=base.use_scheduler,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 239)             scheduler_T_max=base.scheduler_T_max,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 240)             use_hard_negatives=base.use_hard_negatives,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 241)             hard_negative_ratio=base.hard_negative_ratio,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 242)         )
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 243)         super().__init__(merged)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 244)         self.embedding_dim = embedding_dim
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 245) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 246)     # ── Pair encoding ─────────────────────────────────────────────────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 247) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 248)     def _encode_pair(self, step: str, embedder: Any, problem: str = "") -> List[float]:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 249)         step_emb = embedder.embed_text(step)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 250)         prob_emb = embedder.embed_text(problem) if problem else [0.0] * len(step_emb)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 251)         return prob_emb + step_emb
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 252) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 253)     def _embed_steps(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 254)         self,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 255)         steps: List[str],
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 256)         embedder: Any,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 257)         problems: Optional[List[str]] = None,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 258)     ) -> torch.Tensor:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 259)         if problems and len(problems) == len(steps):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 260)             return torch.FloatTensor(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 261)                 [self._encode_pair(s, embedder, p) for s, p in zip(steps, problems)]
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 262)             )
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 263)         return torch.FloatTensor([self._encode_pair(s, embedder) for s in steps])
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 264) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 265)     def evaluate_step(self, step: str, embedder: Any, problem: str = "") -> float:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 266)         """Score step relative to the problem context."""
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 267)         self.eval()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 268)         with torch.no_grad():
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 269)             combined = self._encode_pair(step, embedder, problem)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 270)             tensor = torch.FloatTensor(combined).unsqueeze(0)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 271)             return self(tensor).item()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 272) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 273) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 274) # ── Innovation 3: Hard Negative Mining ───────────────────────────────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 275) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 276) def _apply_hard_negatives(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 277)     pref_embs: torch.Tensor,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 278)     nonpref_embs: torch.Tensor,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 279)     n_hard: int,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 280) ) -> Tuple[torch.Tensor, torch.Tensor]:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 281)     """Replace the first n_hard non-preferred rows with hard negatives (Innovation 3).
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 282) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 283)     Hard negatives are non-preferred steps with the *highest* cosine similarity
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 284)     to their paired preferred step.  These examples look like good steps but
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 285)     lead to lower-quality trajectories — the hardest cases for the PPM to learn.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 286)     Surfacing them per-batch sharpens the decision boundary without requiring
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 287)     a separate offline mining pass.
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 288)     """
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 289)     with torch.no_grad():
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 290)         pref_norm = F.normalize(pref_embs, dim=1)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 291)         nonpref_norm = F.normalize(nonpref_embs, dim=1)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 292)         sim = pref_norm @ nonpref_norm.T   # (n_pref, n_nonpref)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 293)         hard_idx = sim.argmax(dim=1)       # most-similar nonpref for each pref row
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 294) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 295)     n = min(n_hard, pref_embs.size(0), nonpref_embs.size(0))
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 296)     new_nonpref = nonpref_embs.clone()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 297)     new_nonpref[:n] = nonpref_embs[hard_idx[:n]]
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 298)     return pref_embs, new_nonpref
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 299) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 300) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 301) # ── Trainer ───────────────────────────────────────────────────────────────────
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 302) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 303) class PPMTrainer:
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 304)     def __init__(self, model: ProcessPreferenceModel):
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 305)         self.model = model
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 306)         self._scheduler: Optional[torch.optim.lr_scheduler.CosineAnnealingLR] = None
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 307) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 308)     def train(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 309)         self,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 310)         training_data: List[Dict[str, Any]],
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 311)         embedder: Any,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 312)         num_epochs: int = 100,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 313)         validation_data: Optional[List[Dict[str, Any]]] = None,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 314)     ) -> Dict[str, List[float]]:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 315)         """Train with cosine LR annealing (Innovation 5).
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 316) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 317)         Expects training_data dicts with keys:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 318)           required: "preferred", "non_preferred"
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 319)           optional: "preferred_reward", "non_preferred_reward", "problem"
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 320)         """
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 321)         train_losses: List[float] = []
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 322)         val_losses: List[float] = []
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 323) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 324)         # Innovation 5: cosine LR annealing
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 325)         if self.model.config.use_scheduler and num_epochs > 1:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 326)             self._scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 327)                 self.model.optimizer,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 328)                 T_max=min(num_epochs, self.model.config.scheduler_T_max),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 329)                 eta_min=self.model.config.learning_rate * 0.01,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 330)             )
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 331) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 332)         for _epoch in range(num_epochs):
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 333)             epoch_loss = 0.0
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 334)             batches = self._create_batches(training_data, self.model.config.batch_size)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 335)             for batch in batches:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 336)                 epoch_loss += self.model.train_step(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 337)                     batch["preferred"],
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 338)                     batch["non_preferred"],
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 339)                     embedder,
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 340)                     preferred_rewards=batch.get("preferred_rewards"),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 341)                     non_preferred_rewards=batch.get("non_preferred_rewards"),
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 342)                     problems=batch.get("problems"),
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 343)                 )
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 344)             if self._scheduler is not None:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 345)                 self._scheduler.step()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 346)             train_losses.append(epoch_loss / max(1, len(batches)))
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 347) 
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 348)             if validation_data:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 349)                 val_losses.append(self._validate(validation_data, embedder))
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 350) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 351)         return {"train_losses": train_losses, "val_losses": val_losses}
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 352) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 353)     def _create_batches(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 354)         self, data: List[Dict[str, Any]], batch_size: int
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 355)     ) -> List[Dict[str, Any]]:
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 356)         batches: List[Dict[str, Any]] = []
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 357)         for i in range(0, len(data), batch_size):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 358)             chunk = data[i : i + batch_size]
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 359)             batch: Dict[str, Any] = {
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 360)                 "preferred": [d["preferred"] for d in chunk],
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 361)                 "non_preferred": [d["non_preferred"] for d in chunk],
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 362)             }
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 363)             if all("preferred_reward" in d for d in chunk):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 364)                 batch["preferred_rewards"] = [d["preferred_reward"] for d in chunk]
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 365)                 batch["non_preferred_rewards"] = [d["non_preferred_reward"] for d in chunk]
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 366)             if all("problem" in d for d in chunk):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 367)                 batch["problems"] = [d.get("problem", "") for d in chunk]
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 368)             batches.append(batch)
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 369)         return batches
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 370) 
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 371)     def _validate(
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 372)         self, validation_data: List[Dict[str, Any]], embedder: Any
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 373)     ) -> float:
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 374)         self.model.eval()
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 375)         total_loss = 0.0
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 376)         with torch.no_grad():
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 377)             for batch in self._create_batches(validation_data, self.model.config.batch_size):
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 378)                 probs = batch.get("problems")
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 379)                 pref_embs = self.model._embed_steps(batch["preferred"], embedder, probs)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 380)                 nonpref_embs = self.model._embed_steps(batch["non_preferred"], embedder, probs)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 381)                 pref_vals = self.model(pref_embs)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 382)                 nonpref_vals = self.model(nonpref_embs)
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 383)                 loss = F.relu(nonpref_vals - pref_vals + 1.0).mean()
+87b5fa27 (Hammer      2026-04-21 01:28:06 -0400 384)                 total_loss += loss.item()
+55990bed (cinnnamooon 2026-05-05 13:44:00 -0400 385)         return total_loss / max(1, len(validation_data))

@@ -138,22 +138,43 @@ Train PPM:
   --output checkpoints/ppm.pt
 ```
 
+AMC import, warm-up training, and evaluation:
+
+```bash
+.venv/bin/python tools/import_amc.py --output data/amc12.jsonl --n 200
+.venv/bin/python tools/build_amc_preferences.py --data data/amc12.jsonl --output data/amc_preferences.jsonl
+.venv/bin/python tools/train_ppm.py --data data/amc_preferences.jsonl --output checkpoints/ppm_amc.pt --epochs 20
+.venv/bin/python eval.py --dataset amc --amc-path data/amc12.jsonl --strategy mcts+ppm --ppm-checkpoint checkpoints/ppm_amc.pt --n 20
+```
+
+OpenAI teacher-supervised AMC training:
+
+```bash
+.venv/bin/python tools/import_amc.py --output data/amc12_250.jsonl --n 250
+.venv/bin/python tools/build_openai_amc_preferences.py --data data/amc12_250.jsonl --output data/amc_openai_preferences.jsonl --n 200 --model gpt-4o
+.venv/bin/python tools/train_ppm.py --data data/amc_openai_preferences.jsonl --output checkpoints/ppm_amc_openai.pt --epochs 25 --lr 0.0005
+```
+
 ## Project Structure
 
 ```text
 src/core/mcts.py                  MCTS, adaptive search, PPM/verifier pruning
 src/core/ppm.py                   PPM architecture and trainer
 src/core/scoring.py               Verifier and hybrid process scorer
+src/data/amc.py                   AMC dataset loader and normalization
 src/model/model_interface.py      OpenAI, Anthropic, DeepSeek, Ollama, local embedder
 backend/main.py                   FastAPI demo service
 app.py                            Side-by-side comparison demo
 streamlit.py                      Convenience launcher for app.py
+tools/import_amc.py               AMC import to local JSONL
+tools/build_amc_preferences.py    AMC preference-pair warm-up data
+tools/build_openai_amc_preferences.py OpenAI teacher AMC process data
 tools/collect_trajectories.py     Trajectory collection for preference data
 tools/train_ppm.py                PPM training
 tools/member1_search_ablation.py  Search-side ablation, no API key required
 tools/member2_scoring_ablation.py Scoring-side ablation, no API key required
-experiments/run_experiment.py     End-to-end MATH Level 5 experiment
-eval.py                           MATH/OlympiadBench evaluation script
+experiments/run_experiment.py     End-to-end MATH/AMC experiment
+eval.py                           MATH/OlympiadBench/AMC evaluation script
 docs/implementation_notes.md      System design and method notes
 docs/experiment_analysis.md       Results and analysis
 docs/rubric_checklist.md          Rubric compliance checklist

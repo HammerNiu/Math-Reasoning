@@ -42,6 +42,7 @@ except ImportError:
 from src.core.mcts import MCTS, MCTSConfig
 from src.core.ppm import PPMConfig, PPMTrainer, ProcessPreferenceModel, ContextAwarePPM
 from src.model.model_interface import LocalEmbedder, ModelFactory
+from src.data.amc import AMC12_HF_DATASET, load_amc
 
 # ── Dataset registry ──────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ DATASET_REGISTRY: Dict[str, str] = {
     "numina":   "NuminaMath-CoT (large-scale, randomly sampled subset)",
     "olympiad": "OlympiadBench competition problems",
     "aime":     "AIME 1983-2024 historical problems",
+    "amc":      "AMC competition problems",
 }
 
 
@@ -79,6 +81,8 @@ def _extract_boxed(solution: str) -> str:
 
 
 def _latex_to_plain(s: str) -> str:
+    s = s.replace(r"\(", "").replace(r"\)", "")
+    s = s.replace(r"\[", "").replace(r"\]", "")
     s = re.sub(r"\\dfrac\{([^}]+)\}\{([^}]+)\}", r"\1/\2", s)
     s = re.sub(r"\\frac\{([^}]+)\}\{([^}]+)\}", r"\1/\2", s)
     s = re.sub(r"\\sqrt\{([^}]+)\}", r"sqrt(\1)", s)
@@ -262,12 +266,27 @@ def _load_aime(seed: int) -> List[Dict[str, Any]]:
     return pool
 
 
+def _load_amc(seed: int, amc_path: Optional[Path] = None) -> List[Dict[str, Any]]:
+    try:
+        return load_amc(
+            n=0,
+            local_path=amc_path,
+            dataset_id=AMC12_HF_DATASET,
+            split="train",
+            seed=seed,
+        )
+    except Exception as exc:
+        print(f"  Warning: AMC load failed: {exc}")
+        return []
+
+
 def load_multi_dataset(
     sources: List[str] = ("math_l5",),
     subjects: List[str] = DEFAULT_SUBJECTS,
     n_total: int = 200,
     seed: int = 42,
     curriculum: bool = False,
+    amc_path: Optional[Path] = None,
 ) -> List[Dict[str, Any]]:
     """Load and merge problems from multiple math datasets.
 
@@ -286,6 +305,7 @@ def load_multi_dataset(
         "numina":   lambda: _load_numina(seed),
         "olympiad": lambda: _load_olympiad(seed),
         "aime":     lambda: _load_aime(seed),
+        "amc":      lambda: _load_amc(seed, amc_path),
     }
 
     for src in sources:
@@ -326,8 +346,23 @@ def _extract_candidate(mcts_output: str) -> str:
     return lines[-1] if lines else mcts_output.strip()
 
 
-def check_answer(mcts_output: str, expected: str) -> bool:
+def check_answer(mcts_output: str, expected: str, problem: str = "") -> bool:
     candidate = _extract_candidate(mcts_output)
+    plain_exp = _latex_to_plain(expected)
+    plain_cand = _latex_to_plain(candidate)
+
+    if re.fullmatch(r"[a-e]", plain_exp):
+        letter = _extract_choice_letter(candidate)
+        if letter:
+            return letter.lower() == plain_exp
+        option_text = _extract_choice_text(problem, plain_exp.upper())
+        if option_text and _plain_answer_match(candidate, option_text):
+            return True
+
+    return _plain_answer_match(candidate, expected)
+
+
+def _plain_answer_match(candidate: str, expected: str) -> bool:
     plain_exp = _latex_to_plain(expected)
     plain_cand = _latex_to_plain(candidate)
 
@@ -357,6 +392,33 @@ def check_answer(mcts_output: str, expected: str) -> bool:
     if (exp_tok := _tokens(plain_exp)) and exp_tok == _tokens(plain_cand):
         return True
     return False
+
+
+def _extract_choice_letter(text: str) -> str:
+    target = _extract_boxed(text) or text
+    final = re.search(r"final\s+answer[:\s]+(?:\\boxed\{)?\(?([A-E])\)?", target, re.IGNORECASE)
+    if final:
+        return final.group(1).upper()
+    standalone = re.search(r"(?:answer\s+is|choose|option|choice)\s+\(?([A-E])\)?", target, re.IGNORECASE)
+    if standalone:
+        return standalone.group(1).upper()
+    compact = target.strip().upper()
+    return compact.strip("()") if re.fullmatch(r"\(?[A-E]\)?", compact) else ""
+
+
+def _extract_choice_text(problem: str, letter: str) -> str:
+    labels = list(re.finditer(r"(?:\\(?:textbf|mathrm|text)\s*\{\s*)?\(([A-E])\)\s*(?:\})?", problem))
+    if not labels:
+        return ""
+    for idx, match in enumerate(labels):
+        if match.group(1).upper() != letter.upper():
+            continue
+        start = match.end()
+        end = labels[idx + 1].start() if idx + 1 < len(labels) else len(problem)
+        text = problem[start:end]
+        text = re.sub(r"\\qquad|\\quad", " ", text)
+        return text.strip(" $,\n\t")
+    return ""
 
 
 # ── Phase 1: trajectory collection ───────────────────────────────────────────
@@ -498,7 +560,7 @@ def run_config(
         try:
             action, _ = mcts.search(item["problem"], model)
             latency = time.perf_counter() - t0
-            ok = check_answer(action, item["answer"])
+            ok = check_answer(action, item["answer"], problem=item["problem"])
             correct            += int(ok)
             total_calls        += mcts.last_stats.get("model_calls", 0)
             total_latency      += latency
@@ -608,21 +670,32 @@ def main() -> None:
     parser.add_argument("--subjects", nargs="+", default=DEFAULT_SUBJECTS,
                         choices=ALL_SUBJECTS, metavar="SUBJECT",
                         help=f"MATH subjects when using math_l5/math_all (default: {DEFAULT_SUBJECTS})")
+    parser.add_argument("--amc-path", type=Path,
+                        help="Local AMC .jsonl/.json/.csv file; if omitted, the HF AMC loader is used")
+    parser.add_argument("--model", default=os.getenv("EXPERIMENT_MODEL", "openai"),
+                        choices=["openai", "anthropic", "deepseek", "ollama"],
+                        help="LLM backend for trajectory collection/evaluation")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=Path,
                         default=Path("data/experiment_results.json"))
     args = parser.parse_args()
 
-    api_key = os.getenv("DEEPSEEK_API_KEY", "")
-    if not api_key:
-        sys.exit("DEEPSEEK_API_KEY not set — check your .env file.")
-    model = ModelFactory.create_model("deepseek", api_key)
+    key_map = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "ollama": "",
+    }
+    api_key = os.getenv(key_map[args.model], "") if key_map[args.model] else ""
+    if args.model != "ollama" and not api_key:
+        sys.exit(f"{key_map[args.model]} not set — check your .env file.")
+    model = ModelFactory.create_model(args.model, api_key)
 
     print(f"\n{'='*_W}")
     print("  MCTS + ContextAwarePPM Experiment — Math Reasoning")
     print(f"  Train: {args.train}  |  Test: {args.test}  "
           f"|  Simulations: {args.simulations}  |  PPM epochs: {args.ppm_epochs}")
-    print(f"  Datasets: {args.dataset}  |  Curriculum: {args.curriculum}")
+    print(f"  Datasets: {args.dataset}  |  Curriculum: {args.curriculum}  |  Model: {args.model}")
     print(f"{'='*_W}\n")
 
     print("Loading training dataset...")
@@ -632,6 +705,7 @@ def main() -> None:
         n_total=args.train + args.test,
         seed=args.seed,
         curriculum=args.curriculum,
+        amc_path=args.amc_path,
     )
     train_problems = all_problems[:args.train]
     test_problems  = all_problems[args.train : args.train + args.test]

@@ -1,0 +1,339 @@
+commit 60b43696c85a81056b9592694ea4e5e02873cc4a
+Author: superwayne66 <1350469599@qq.com>
+Date:   Tue May 5 21:13:07 2026 -0400
+
+    member ones' tasks finished
+
+ app.py                       | 344 +++++++++++++++++++++++++++++++++++--------
+ src/core/mcts.py             |   1 +
+ src/model/model_interface.py |   2 +-
+ 3 files changed, 288 insertions(+), 59 deletions(-)
+
+commit 597221a0d0507100d99ffd276bede87e0370f3d6
+Author: superwayne66 <1350469599@qq.com>
+Date:   Tue May 5 16:34:55 2026 -0400
+
+    member ones' tasks finished
+
+ .streamlit/config.toml |   9 ++++
+ app.py                 | 141 +++++++++++++++++++++++++++++++++++++++++--------
+ src/core/mcts.py       |  58 +++++++++++++++++---
+ src/core/scoring.py    |   8 ++-
+ 4 files changed, 185 insertions(+), 31 deletions(-)
+
+commit c190b40165453c846ae88580cd75b94315ad07e8
+Merge: 6884bed e204731
+Author: superwayne66 <1350469599@qq.com>
+Date:   Tue May 5 15:24:53 2026 -0400
+
+    Merge remote-tracking branch 'origin/main'
+
+commit 6884bedc19ed832f15d674ab29ab79ff896ba02c
+Author: superwayne66 <1350469599@qq.com>
+Date:   Tue May 5 15:24:40 2026 -0400
+
+    member ones' tasks finished
+
+ .env.example       |    2 +-
+ README.md          |    9 +-
+ app.py             | 1635 +++++++++++++++++++++++++++++++++++++++++++++++-----
+ docs/demo_guide.md |    4 +-
+ 4 files changed, 1505 insertions(+), 145 deletions(-)
+
+commit e204731fe7220f74c591731ece2828beb81d7599
+Author: cinnnamooon <1694563798@qq.com>
+Date:   Tue May 5 14:02:30 2026 -0400
+
+    final
+
+ checkpoints/README.md            |  15 --
+ docs/member2_scoring_ablation.md |  11 --
+ report/final_report.pdf          | Bin 111062 -> 0 bytes
+ report/final_report.tex          | 340 ---------------------------------------
+ 4 files changed, 366 deletions(-)
+
+commit bc8c386b157ae7dc75f12dfd815f4493f8cfecf0
+Author: cinnnamooon <1694563798@qq.com>
+Date:   Tue May 5 13:58:25 2026 -0400
+
+    final
+
+ README.md | 70 ++++++++-------------------------------------------------------
+ 1 file changed, 8 insertions(+), 62 deletions(-)
+
+commit 087c9e753f67408324ff8e2eaa4c908a6a944d98
+Merge: 7ce46a3 cda0f1e
+Author: cinnnamooon <111257853+cinnnamooon@users.noreply.github.com>
+Date:   Tue May 5 13:50:44 2026 -0400
+
+    Merge branch 'main' into ppm
+
+commit 7ce46a3856d861f2dddcc3c057a6ea9a54f3ad8b
+Author: cinnnamooon <1694563798@qq.com>
+Date:   Tue May 5 13:45:26 2026 -0400
+
+    ppm
+
+ docs/ppm_innovations.md | 394 ------------------------------------------------
+ 1 file changed, 394 deletions(-)
+
+commit 55990bedde16fa5a7620a32ce50db3fc7a5ace95
+Author: cinnnamooon <1694563798@qq.com>
+Date:   Tue May 5 13:44:00 2026 -0400
+
+    ppm final
+
+ README.md                     |  39 +++-
+ docs/ppm_innovations.md       | 394 ++++++++++++++++++++++++++++++++++++
+ experiments/run_experiment.py | 459 ++++++++++++++++++++++++++++++------------
+ src/core/mcts.py              |  31 ++-
+ src/core/ppm.py               | 454 ++++++++++++++++++++++++++++-------------
+ 5 files changed, 1103 insertions(+), 274 deletions(-)
+
+commit cda0f1e2b0e0533db22d1a3c3b318454fc72ad88
+Author: superwayne66 <1350469599@qq.com>
+Date:   Tue May 5 13:16:04 2026 -0400
+
+    member ones' tasks finished
+
+ .env.example                      |   3 +
+ .gitignore                        |   1 +
+ README.md                         | 205 ++++++++++++-------
+ app.py                            | 401 ++++++++++++++++++++++++++++++++++++++
+ backend/main.py                   |  43 +++-
+ checkpoints/README.md             |  15 ++
+ data/README.md                    |  13 ++
+ docs/demo_guide.md                |  57 ++++++
+ docs/experiment_analysis.md       | 123 ++++++++++++
+ docs/implementation_notes.md      |  33 +++-
+ docs/member1_search_ablation.md   |  21 ++
+ docs/member2_scoring_ablation.md  |  11 ++
+ example.py                        |   6 +-
+ report/final_report.pdf           | Bin 0 -> 111062 bytes
+ report/final_report.tex           | 340 ++++++++++++++++++++++++++++++++
+ requirements.txt                  |   1 +
+ src/core/mcts.py                  |  41 +++-
+ src/core/ppm.py                   |  10 +-
+ src/core/scoring.py               | 111 +++++++++++
+ src/model/__init__.py             |  14 +-
+ src/model/model_interface.py      |  23 ++-
+ src/models/__init__.py            |  14 +-
+ streamlit.py                      |  77 ++------
+ tools/member2_scoring_ablation.py | 115 +++++++++++
+ 24 files changed, 1523 insertions(+), 155 deletions(-)
+
+commit b975ac66e85955c0da00cd5cb5e912bf4ea0afcd
+Author: Hammer <hn2477@columbia.edu>
+Date:   Mon May 4 17:07:10 2026 -0400
+
+    Change eval.py usage examples for n parameter
+    
+    Updated usage examples to reflect new parameter values for n.
+
+ eval.py | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+commit 2eaab0e81687694152236f48b938ddfdc322a9ae
+Author: Hammer <hn2477@columbia.edu>
+Date:   Mon May 4 17:04:20 2026 -0400
+
+    Add files via upload
+
+ eval.py | 172 +++++++++++++++++++++++++++++++++++++++++++++++++++-------------
+ 1 file changed, 137 insertions(+), 35 deletions(-)
+
+commit 14c6ef466b6811fd877a985fbfd520d776ede225
+Author: Hammer <hn2477@columbia.edu>
+Date:   Mon May 4 16:27:37 2026 -0400
+
+    Add files via upload
+
+ eval.py | 316 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 316 insertions(+)
+
+commit 6df125d1ca2b286852c85623064697fe8e850b5c
+Author: cinnnamooon <1694563798@qq.com>
+Date:   Fri May 1 17:47:06 2026 -0400
+
+    -
+
+ data/experiment_results.json | 245 -------------------------------------------
+ 1 file changed, 245 deletions(-)
+
+commit e33a264eee40db438078255816e1de9a290b7a98
+Author: cinnnamooon <1694563798@qq.com>
+Date:   Fri May 1 17:11:54 2026 -0400
+
+    final
+
+ tests/test_mcts_member1.py | 62 ----------------------------------------------
+ 1 file changed, 62 deletions(-)
+
+commit 4376982b8f5fb66156d5152cd9a604da0bead668
+Author: cinnnamooon <1694563798@qq.com>
+Date:   Fri May 1 17:11:07 2026 -0400
+
+    final
+
+ checkpoints/ppm_math_level5.pt | Bin 2400910 -> 0 bytes
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+commit b9cb1e12f825bf0093543abcf12a1da285495aa1
+Author: cinnnamooon <1694563798@qq.com>
+Date:   Fri May 1 17:10:03 2026 -0400
+
+    final
+
+ README.md                      | 107 ++++++---
+ backend/main.py                | 154 ++++++++++---
+ checkpoints/ppm_math_level5.pt | Bin 0 -> 2400910 bytes
+ config/default.json            |  17 +-
+ data/experiment_results.json   | 245 ++++++++++++++++++++
+ docs/implementation_notes.md   | 264 ++++++++++++++++++++++
+ docs/member1_mcts.md           |  88 --------
+ experiments/run_experiment.py  | 491 +++++++++++++++++++++++++++++++++++++++++
+ requirements.txt               |   3 +-
+ src/core/mcts.py               | 233 +++++++++++++++++--
+ src/model/model_interface.py   | 179 +++++++++++++--
+ tools/collect_trajectories.py  | 181 +++++++++++++++
+ tools/train_ppm.py             | 135 +++++++++++
+ 13 files changed, 1907 insertions(+), 190 deletions(-)
+
+commit c0b89c2940bea3246fc87c4c3e80fb82090fc965
+Author: superwayne66 <1350469599@qq.com>
+Date:   Mon Apr 27 06:05:29 2026 -0400
+
+    member ones' tasks finished
+
+ .gitignore                       |   4 +
+ README.md                        |   7 +
+ config/default.json              |  18 ++-
+ docs/member1_mcts.md             |  88 +++++++++++
+ src/core/mcts.py                 | 325 +++++++++++++++++++++++++++++++++++----
+ src/model/__init__.py            |   9 ++
+ src/models/__init__.py           |   9 ++
+ src/models/model_interface.py    |   1 +
+ tests/test_mcts_member1.py       |  62 ++++++++
+ tools/member1_search_ablation.py | 223 +++++++++++++++++++++++++++
+ 10 files changed, 717 insertions(+), 29 deletions(-)
+
+commit 12e9068f867f0fe9c4d5b43503989276514cf9df
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:32:22 2026 -0400
+
+    Delete src/core/__init__.py
+
+ src/core/__init__.py | 1 -
+ 1 file changed, 1 deletion(-)
+
+commit d25c3e6fbb098ba258b68b0f9476d03c5f85615e
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:32:14 2026 -0400
+
+    Delete src/model/__init__.py
+
+ src/model/__init__.py | 1 -
+ 1 file changed, 1 deletion(-)
+
+commit f0fea5c0ba1f9c77df255ad2f8882058f54216e7
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:31:37 2026 -0400
+
+    Delete config/__init__.py
+
+ config/__init__.py | 1 -
+ 1 file changed, 1 deletion(-)
+
+commit 3b101f21d914d5ba3a65ffa51a53e7090393b162
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:31:21 2026 -0400
+
+    Add files via upload
+
+ backend/main.py | 62 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 62 insertions(+)
+
+commit f92e6b8bb64472905b6bb253404d4481ddea821d
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:31:05 2026 -0400
+
+    Create __init__.py
+
+ backend/__init__.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+commit 2996487b70c17960526949459c283f4855dabff6
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:30:29 2026 -0400
+
+    Add files via upload
+
+ config/default.json | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+commit 5f5a02bfd4e074bae3eb6910aaa8ea1b40817fd5
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:30:14 2026 -0400
+
+    Create __init__.py
+
+ config/__init__.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+commit a9d51488b957a6c4f7f9e89d761f5b7c78631fec
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:29:20 2026 -0400
+
+    Add files via upload
+
+ README.md        | 60 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ example.py       | 38 +++++++++++++++++++++++++++++++++
+ requirements.txt |  8 +++++++
+ streamlit.py     | 64 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 170 insertions(+)
+
+commit 6bb75f4455d86c555c3f59bb14dc03f7539bde24
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:28:58 2026 -0400
+
+    Add files via upload
+
+ src/model/model_interface.py | 171 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 171 insertions(+)
+
+commit 78afee79aefc8c891c8fad72420457fed6033919
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:28:44 2026 -0400
+
+    Create __init__.py
+
+ src/model/__init__.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+commit 87b5fa276f12f203c73bad0ab740c0277b5dc17a
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:28:06 2026 -0400
+
+    Add files via upload
+
+ src/core/mcts.py | 207 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/core/ppm.py  | 201 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 408 insertions(+)
+
+commit ea9231e991975e6ad9b1077cc14d7e0d7ccf339d
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:27:49 2026 -0400
+
+    Create __init__.py
+
+ src/core/__init__.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+commit 3d2fff79a29ae234f04f79a890d54e3c7bcbd3a8
+Author: Hammer <hn2477@columbia.edu>
+Date:   Tue Apr 21 01:27:03 2026 -0400
+
+    Create __init__.py
+
+ src/__init__.py | 1 +
+ 1 file changed, 1 insertion(+)

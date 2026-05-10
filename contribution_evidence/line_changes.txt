@@ -1,0 +1,152 @@
+60b4369 | superwayne66 | 1350469599@qq.com | Tue May 5 21:13:07 2026 | member ones' tasks finished
+
+286	58	app.py
+1	0	src/core/mcts.py
+1	1	src/model/model_interface.py
+597221a | superwayne66 | 1350469599@qq.com | Tue May 5 16:34:55 2026 | member ones' tasks finished
+
+9	0	.streamlit/config.toml
+119	22	app.py
+51	7	src/core/mcts.py
+6	2	src/core/scoring.py
+c190b40 | superwayne66 | 1350469599@qq.com | Tue May 5 15:24:53 2026 | Merge remote-tracking branch 'origin/main'
+6884bed | superwayne66 | 1350469599@qq.com | Tue May 5 15:24:40 2026 | member ones' tasks finished
+
+1	1	.env.example
+5	4	README.md
+1497	138	app.py
+2	2	docs/demo_guide.md
+e204731 | cinnnamooon | 1694563798@qq.com | Tue May 5 14:02:30 2026 | final
+
+0	15	checkpoints/README.md
+0	11	docs/member2_scoring_ablation.md
+-	-	report/final_report.pdf
+0	340	report/final_report.tex
+bc8c386 | cinnnamooon | 1694563798@qq.com | Tue May 5 13:58:25 2026 | final
+
+8	62	README.md
+087c9e7 | cinnnamooon | 111257853+cinnnamooon@users.noreply.github.com | Tue May 5 13:50:44 2026 | Merge branch 'main' into ppm
+7ce46a3 | cinnnamooon | 1694563798@qq.com | Tue May 5 13:45:26 2026 | ppm
+
+0	394	docs/ppm_innovations.md
+55990be | cinnnamooon | 1694563798@qq.com | Tue May 5 13:44:00 2026 | ppm final
+
+34	5	README.md
+394	0	docs/ppm_innovations.md
+328	131	experiments/run_experiment.py
+28	3	src/core/mcts.py
+319	135	src/core/ppm.py
+cda0f1e | superwayne66 | 1350469599@qq.com | Tue May 5 13:16:04 2026 | member ones' tasks finished
+
+3	0	.env.example
+1	0	.gitignore
+134	71	README.md
+401	0	app.py
+39	4	backend/main.py
+15	0	checkpoints/README.md
+13	0	data/README.md
+57	0	docs/demo_guide.md
+123	0	docs/experiment_analysis.md
+30	3	docs/implementation_notes.md
+21	0	docs/member1_search_ablation.md
+11	0	docs/member2_scoring_ablation.md
+3	3	example.py
+-	-	report/final_report.pdf
+340	0	report/final_report.tex
+1	0	requirements.txt
+33	8	src/core/mcts.py
+7	3	src/core/ppm.py
+111	0	src/core/scoring.py
+13	1	src/model/__init__.py
+19	4	src/model/model_interface.py
+13	1	src/models/__init__.py
+20	57	streamlit.py
+115	0	tools/member2_scoring_ablation.py
+b975ac6 | Hammer | hn2477@columbia.edu | Mon May 4 17:07:10 2026 | Change eval.py usage examples for n parameter
+
+4	4	eval.py
+2eaab0e | Hammer | hn2477@columbia.edu | Mon May 4 17:04:20 2026 | Add files via upload
+
+137	35	eval.py
+14c6ef4 | Hammer | hn2477@columbia.edu | Mon May 4 16:27:37 2026 | Add files via upload
+
+316	0	eval.py
+6df125d | cinnnamooon | 1694563798@qq.com | Fri May 1 17:47:06 2026 | -
+
+0	245	data/experiment_results.json
+e33a264 | cinnnamooon | 1694563798@qq.com | Fri May 1 17:11:54 2026 | final
+
+0	62	tests/test_mcts_member1.py
+4376982 | cinnnamooon | 1694563798@qq.com | Fri May 1 17:11:07 2026 | final
+
+-	-	checkpoints/ppm_math_level5.pt
+b9cb1e1 | cinnnamooon | 1694563798@qq.com | Fri May 1 17:10:03 2026 | final
+
+75	32	README.md
+120	34	backend/main.py
+-	-	checkpoints/ppm_math_level5.pt
+16	1	config/default.json
+245	0	data/experiment_results.json
+264	0	docs/implementation_notes.md
+0	88	docs/member1_mcts.md
+491	0	experiments/run_experiment.py
+2	1	requirements.txt
+213	20	src/core/mcts.py
+165	14	src/model/model_interface.py
+181	0	tools/collect_trajectories.py
+135	0	tools/train_ppm.py
+c0b89c2 | superwayne66 | 1350469599@qq.com | Mon Apr 27 06:05:29 2026 | member ones' tasks finished
+
+4	0	.gitignore
+7	0	README.md
+16	2	config/default.json
+88	0	docs/member1_mcts.md
+298	27	src/core/mcts.py
+9	0	src/model/__init__.py
+9	0	src/models/__init__.py
+1	0	src/models/model_interface.py
+62	0	tests/test_mcts_member1.py
+223	0	tools/member1_search_ablation.py
+12e9068 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:32:22 2026 | Delete src/core/__init__.py
+
+0	1	src/core/__init__.py
+d25c3e6 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:32:14 2026 | Delete src/model/__init__.py
+
+0	1	src/model/__init__.py
+f0fea5c | Hammer | hn2477@columbia.edu | Tue Apr 21 01:31:37 2026 | Delete config/__init__.py
+
+0	1	config/__init__.py
+3b101f2 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:31:21 2026 | Add files via upload
+
+62	0	backend/main.py
+f92e6b8 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:31:05 2026 | Create __init__.py
+
+1	0	backend/__init__.py
+2996487 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:30:29 2026 | Add files via upload
+
+31	0	config/default.json
+5f5a02b | Hammer | hn2477@columbia.edu | Tue Apr 21 01:30:14 2026 | Create __init__.py
+
+1	0	config/__init__.py
+a9d5148 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:29:20 2026 | Add files via upload
+
+60	0	README.md
+38	0	example.py
+8	0	requirements.txt
+64	0	streamlit.py
+6bb75f4 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:28:58 2026 | Add files via upload
+
+171	0	src/model/model_interface.py
+78afee7 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:28:44 2026 | Create __init__.py
+
+1	0	src/model/__init__.py
+87b5fa2 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:28:06 2026 | Add files via upload
+
+207	0	src/core/mcts.py
+201	0	src/core/ppm.py
+ea9231e | Hammer | hn2477@columbia.edu | Tue Apr 21 01:27:49 2026 | Create __init__.py
+
+1	0	src/core/__init__.py
+3d2fff7 | Hammer | hn2477@columbia.edu | Tue Apr 21 01:27:03 2026 | Create __init__.py
+
+1	0	src/__init__.py

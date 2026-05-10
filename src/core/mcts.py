@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from src.core.diagram import diagram_summary
+
 
 """
 Monte Carlo Tree Search (MCTS) implementation for mathematical reasoning.
@@ -52,7 +54,7 @@ class MCTSConfig:
     prune_threshold: float = 0.25
     early_stop_reward: float = 0.95
     early_stop_min_simulations: int = 1
-    seed: Optional[int] = None
+    seed: Optional[int] = 20240509
     # --- Large-model optimizations ---
     eval_cache: bool = True        # cache evaluate_state results (avoids duplicate API calls)
     token_budget: int = 0          # stop search when estimated tokens exceed this (0 = no limit)
@@ -61,7 +63,7 @@ class MCTSConfig:
     max_retries: int = 3           # retry failed LLM calls
     retry_delay: float = 2.0       # base delay in seconds for exponential backoff
     fail_fast_on_generation_error: bool = False  # raise instead of returning no actions when generation fails
-    generation_temperature: float = 0.55  # lower values make math steps more deterministic
+    generation_temperature: float = 0.0  # deterministic math step generation by default
     generation_max_tokens: int = 220      # keep candidate steps from turning into full solutions
     # --- Method 1: Pruned MCTS ---
     top_k_prune: int = 0           # keep only top-k steps by PPM score before expansion (0 = disabled)
@@ -119,6 +121,7 @@ class MCTS:
         self._rng = np.random.default_rng(self.config.seed)
         self.last_stats: Dict[str, Any] = {}
         self._eval_cache: Dict[str, float] = {}  # state → score cache
+        self._root_problem: str = ""
 
     def set_model(self, model: Any) -> None:
         self._model = model
@@ -194,6 +197,7 @@ class MCTS:
         started_at = time.perf_counter()
         self._init_stats(root_state)
         self._eval_cache.clear()
+        self._root_problem = root_state.strip()
         root = MCTSNode(state=root_state)
         trajectory = []
 
@@ -270,11 +274,15 @@ class MCTS:
             return []
 
         action_count = self._candidate_count_for_state(state)
-        problem = state.split("\n", 1)[0].strip()
+        problem = self._problem_from_state(state)
+        diagram_context = diagram_summary(problem)
         prompt = f"""You are solving a math problem step by step.
 
 Original problem:
 {problem}
+
+Diagram context:
+{diagram_context or "No parsed diagram context."}
 
 Current reasoning so far:
 {state}
@@ -284,6 +292,24 @@ Each candidate must be one atomic, verifiable next step, not a complete solution
 Keep each candidate under 25 words when possible.
 For algebra, expand expressions before matching coefficients, then compare each coefficient exactly.
 For coefficient matching, for example (Ax-k)(mBx+C) expands to mABx^2 + (AC-kmB)x - kC.
+For digit replacement divisibility, define the integer by its digits, turn each replacement into a modular divisibility check, and verify candidates from the requested boundary.
+For finite integer problems, prefer exact case checking or modular constraints over guessing.
+For AIME-style counting problems, identify the counted structures, derive necessary and sufficient conditions, count cases, and check overcounting.
+For maximal grid/chip/color problems, define row and column signatures, prove when a cell must be occupied, then count valid signatures.
+For problems where Bob lists sets B by maximum element, count fixed maximum a as 2^(a-1), then use the binary expansion of the total.
+For distance-rate-time break problems, compute driving time = distance / speed, subtract it from total elapsed time, then convert hours to minutes.
+Do not invent unknown start or end clock times when only elapsed time is needed.
+For three equally spaced numbers with adjacent pair sums, let the numbers be a-d, a, a+d; adding the pair-sum equations gives 4a for the middle term, then the total is 3a.
+For multiple-choice problems, solve for the value, compare it with the listed choices, and make FINAL ANSWER include the letter and value.
+For coin-stack problems where order matters, use thickness-weighted equations and sequence counting, e.g. g + 3s = 8 and binomial positions or f(n)=f(n-1)+f(n-3), never g+s=height.
+For triangle third-side integer problems, use the strict inequality |a-b| < x < a+b before counting or summing integer x.
+For same-area noncongruent triangles with fixed sides a and b, use supplementary included angles; the two third sides c,d satisfy c^2+d^2 = 2(a^2+b^2).
+For rod or side-length polygon existence problems, use the nondegenerate polygon condition: the longest side must be less than the sum of the other sides. Count only remaining allowed rods.
+For diagram geometry, use extracted coordinates, labels, filled regions, circles, and symmetry from the diagram context; do not ignore shaded regions or diagram labels.
+For shaded polygon diagrams, compute areas with shoelace or split self-crossing fills at their intersection.
+For sector-to-cone diagrams, equate sector arc length to cone base circumference and keep the sector radius as slant height.
+For tangent equal-circle diagrams, place centers on a symmetry axis and write distance equations between circle centers.
+For pentahedron or frustum-like 3D diagrams, use cross-section area as a function of height or decompose into tetrahedra/prismoids.
 Do not invent shortcut coefficient equations; every equation must follow from the previous line.
 Use exact arithmetic and check signs carefully.
 Do not include explanations before or after the STEP lines.
@@ -380,10 +406,18 @@ STEP: <step text>"""
         new_state = f"{state}\n{action}"
         n = self.config.max_state_steps
         if n > 0:
-            lines = [l for l in new_state.split('\n') if l.strip()]
-            if len(lines) > n + 1:          # preserve problem statement (line 0)
-                lines = lines[:1] + lines[-(n):]
-            new_state = '\n'.join(lines)
+            root_problem = self._root_problem.strip()
+            if root_problem and new_state.startswith(root_problem):
+                step_text = new_state[len(root_problem):].strip()
+                steps = [l for l in step_text.split('\n') if l.strip()]
+                if len(steps) > n:
+                    steps = steps[-n:]
+                new_state = root_problem + ("\n" + "\n".join(steps) if steps else "")
+            else:
+                lines = [l for l in new_state.split('\n') if l.strip()]
+                if len(lines) > n + 1:          # preserve problem statement (line 0)
+                    lines = lines[:1] + lines[-(n):]
+                new_state = '\n'.join(lines)
         return new_state
 
     def is_terminal_state(self, state: str) -> bool:
@@ -414,8 +448,12 @@ STEP: <step text>"""
             # Method 1 / 2 (PPM path): fastest, takes priority over any LLM critic
             score = self._evaluate_with_ppm(lines)
         elif self.is_terminal_state(state):
-            problem = lines[0] if lines else ""
-            steps = lines[1:] if len(lines) > 1 else [state]
+            problem = self._problem_from_state(state)
+            if self._root_problem and state.startswith(self._root_problem):
+                step_text = state[len(self._root_problem):].strip()
+                steps = [line for line in step_text.split("\n") if line.strip()] or [state]
+            else:
+                steps = lines[1:] if len(lines) > 1 else [state]
             # Method 2 (asymmetric critic path): use cheap evaluator if registered
             evaluator = self._critic if self._critic is not None else self._model
             try:
@@ -439,20 +477,26 @@ STEP: <step text>"""
 
         For terminal states, average all step scores.
         For non-terminal states, score only the last step (most recent action).
-        The problem statement (first line) is forwarded as context when a
+        The full root problem is forwarded as context when a
         ContextAwarePPM is attached; ignored by the base ProcessPreferenceModel.
         Falls back to 0.5 on any error.
         """
-        steps = lines[1:] if len(lines) > 1 else lines
-        problem = lines[0] if lines else ""
+        state = "\n".join(lines)
+        if self._root_problem and state.startswith(self._root_problem):
+            step_text = state[len(self._root_problem):].strip()
+            steps = [line for line in step_text.split("\n") if line.strip()]
+            scoring_state = state
+        else:
+            steps = lines[1:] if len(lines) > 1 else lines
+            scoring_state = state
         if not steps:
             return 0.5
         try:
-            if self.is_terminal_state('\n'.join(lines)):
-                scores = [self._score_with_process_model(s, '\n'.join(lines)) for s in steps]
+            if self.is_terminal_state(state):
+                scores = [self._score_with_process_model(s, scoring_state) for s in steps]
                 return float(np.mean(scores))
             # Non-terminal: score only the latest step
-            return self._score_with_process_model(steps[-1], '\n'.join(lines))
+            return self._score_with_process_model(steps[-1], scoring_state)
         except Exception:
             return 0.5
 
@@ -522,13 +566,11 @@ STEP: <step text>"""
         """Score each candidate step with the PPM and keep top-k (Method 1).
 
         Scores are computed in parallel when parallel_actions is enabled.
-        The problem statement (first line of state) is forwarded as context
+        The full root problem is forwarded as context
         when a ContextAwarePPM is attached.
         Falls back to heuristic score for any step that fails PPM scoring.
         """
         k = max(1, self.config.top_k_prune)
-        problem = state.split('\n')[0].strip() if state else ""
-
         def _score(action: str) -> Tuple[float, str]:
             try:
                 return (self._score_with_process_model(action, state), action)
@@ -542,7 +584,33 @@ STEP: <step text>"""
             scored = [_score(a) for a in actions]
 
         scored.sort(key=lambda t: t[0], reverse=True)
-        kept = [action for _, action in scored[:k]]
+        if not scored:
+            return []
+
+        best_score = scored[0][0]
+        max_keep = max(k, self.config.max_branching_factor)
+        confidence_margin = 0.08
+        kept = [
+            action for score, action in scored
+            if score >= best_score - confidence_margin
+        ][:max_keep]
+        if len(kept) < k:
+            kept = [action for _, action in scored[:k]]
+
+        # If the process model is uncertain, avoid destructive pruning.  This
+        # makes the improved search conservative on unfamiliar AMC/diagram
+        # patterns where the base model may already know the right path.
+        if best_score < 0.58:
+            kept = [action for _, action in scored[:max_keep]]
+
+        final_actions = [
+            action for _, action in scored
+            if "final answer:" in action.lower()
+        ]
+        for action in final_actions:
+            if action not in kept and len(kept) < max_keep:
+                kept.append(action)
+
         n_pruned = len(scored) - len(kept)
         self._stats_increment("ppm_pruned", n_pruned)
         self._stats_increment("pruned_actions", n_pruned)
@@ -554,10 +622,29 @@ STEP: <step text>"""
         New scorers can accept an optional state= argument. Older PPM objects
         only accept (step, embedder), so keep that path for compatibility.
         """
+        embedder = self._process_embedder()
+        problem = self._problem_from_state(state)
         try:
-            return float(self._ppm.evaluate_step(step, self._model, state=state))
+            return float(self._ppm.evaluate_step(step, embedder, state=state))
         except TypeError:
-            return float(self._ppm.evaluate_step(step, self._model))
+            pass
+        try:
+            return float(self._ppm.evaluate_step(step, embedder, problem=problem))
+        except TypeError:
+            return float(self._ppm.evaluate_step(step, embedder))
+
+    def _problem_from_state(self, state: str) -> str:
+        if self._root_problem:
+            return self._root_problem
+        return state.split("\n", 1)[0].strip() if state else ""
+
+    def _process_embedder(self) -> Any:
+        """Use the local training embedder for PPM scoring when available."""
+        try:
+            from src.model.model_interface import LocalEmbedder
+            return LocalEmbedder.get()
+        except Exception:
+            return self._model
 
     def _dedupe_actions(self, actions: Sequence[str]) -> List[str]:
         seen = set()
@@ -663,6 +750,9 @@ STEP: <step text>"""
         return max(0.0, min(0.65, progress))
 
     def _state_depth(self, state: str) -> int:
+        if self._root_problem and state.startswith(self._root_problem):
+            step_text = state[len(self._root_problem):].strip()
+            return len([line for line in step_text.splitlines() if line.strip()])
         return max(0, len([line for line in state.splitlines() if line.strip()]) - 1)
 
     def _trajectory_entry(

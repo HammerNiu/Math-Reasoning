@@ -1,0 +1,766 @@
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400   1) import json
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400   2) import re
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400   3) import time
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400   4) from concurrent.futures import ThreadPoolExecutor, as_completed
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400   5) from dataclasses import dataclass, field
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400   6) from typing import Any, Dict, List, Optional, Sequence, Tuple
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400   7) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400   8) import numpy as np
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400   9) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  10) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  11) """
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  12) Monte Carlo Tree Search (MCTS) implementation for mathematical reasoning.
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  13) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  14) The default "baseline" strategy preserves the simple repo behavior. The
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  15) "adaptive" strategy is Member 1's search-side innovation: it asks for more
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  16) candidate steps near the root, orders them by terminal promise and diversity,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  17) prunes weak near-duplicates, and stops early when a high-confidence answer is
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  18) found.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  19) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  20) Large-model optimizations (all opt-in via config):
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  21)   - eval_cache: skip redundant evaluate_state calls for identical states
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  22)   - token_budget: stop search once estimated tokens exceed the budget
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  23)   - max_state_steps: truncate long state contexts to the last N steps
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  24)   - parallel_actions: generate multiple candidate steps concurrently
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  25)   - max_retries / retry_delay: retry failed LLM calls with backoff
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  26) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  27) Method 1 — Pruned MCTS (top_k_prune):
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  28)   When a PPM is attached and top_k_prune > 0, _prepare_actions() scores every
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  29)   candidate step with the PPM before expansion and keeps only the top-k.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  30)   This replaces the keyword heuristic with a learned signal and cuts the
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  31)   branching factor to exactly k, reducing downstream LLM calls significantly.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  32) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  33) Method 2 — Asymmetric Policy–Reward (set_critic):
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  34)   A separate critic model can be registered with set_critic(). It is used
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  35)   exclusively for evaluate_state() (reward side), while the main model
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  36)   handles step generation (policy side). Typical usage:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  37)       mcts.set_model(large_model)   # generator — DeepSeek-V3 / GPT-4o
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  38)       mcts.set_critic(small_model)  # evaluator — GPT-4o-mini / Haiku
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  39)       mcts.set_ppm(trained_ppm)     # PPM takes priority over critic when set
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  40) """
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  41) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  42) @dataclass
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  43) class MCTSConfig:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  44)     exploration_weight: float = 1.0
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  45)     max_simulations: int = 3
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  46)     max_depth: int = 5
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  47)     num_actions: int = 2  # candidate next steps per node
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  48)     search_strategy: str = "baseline"  # "baseline" or "adaptive"
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  49)     max_branching_factor: int = 4
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  50)     min_branching_factor: int = 1
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  51)     diversity_weight: float = 0.25
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  52)     prune_threshold: float = 0.25
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  53)     early_stop_reward: float = 0.95
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  54)     early_stop_min_simulations: int = 1
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  55)     seed: Optional[int] = None
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  56)     # --- Large-model optimizations ---
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  57)     eval_cache: bool = True        # cache evaluate_state results (avoids duplicate API calls)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  58)     token_budget: int = 0          # stop search when estimated tokens exceed this (0 = no limit)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  59)     max_state_steps: int = 0       # truncate state to last N steps to limit context growth (0 = no limit)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  60)     parallel_actions: bool = False  # generate candidate steps concurrently (faster, more API calls in parallel)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  61)     max_retries: int = 3           # retry failed LLM calls
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  62)     retry_delay: float = 2.0       # base delay in seconds for exponential backoff
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400  63)     fail_fast_on_generation_error: bool = False  # raise instead of returning no actions when generation fails
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400  64)     generation_temperature: float = 0.55  # lower values make math steps more deterministic
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400  65)     generation_max_tokens: int = 220      # keep candidate steps from turning into full solutions
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  66)     # --- Method 1: Pruned MCTS ---
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400  67)     top_k_prune: int = 0           # keep only top-k steps by PPM score before expansion (0 = disabled)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  68) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  69) class MCTSNode:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  70)     def __init__(self, state: str, parent: Optional['MCTSNode'] = None, action: Optional[str] = None):
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  71)         self.state = state
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  72)         self.parent = parent
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  73)         self.action = action
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  74)         self.children: List[MCTSNode] = []
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  75)         self.visits = 0
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  76)         self.value = 0.0
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  77)         self.untried_actions: List[str] = []
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  78) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  79)     def add_child(self, action: str, state: str) -> 'MCTSNode':
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  80)         child = MCTSNode(state=state, parent=self, action=action)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  81)         self.children.append(child)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  82)         if action in self.untried_actions:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  83)             self.untried_actions.remove(action)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  84)         return child
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  85) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  86)     def update(self, reward: float) -> None:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  87)         self.visits += 1
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  88)         self.value += (reward - self.value) / self.visits
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  89) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  90)     def get_ucb_score(self, exploration_weight: float) -> float:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  91)         if self.visits == 0:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  92)             return float('inf')
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  93)         exploitation = self.value
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  94)         parent_visits = max(1, self.parent.visits if self.parent else 1)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400  95)         exploration = exploration_weight * np.sqrt(2 * np.log(parent_visits) / self.visits)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  96)         return exploitation + exploration
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  97) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  98)     def is_terminal(self) -> bool:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400  99)         return _is_terminal(self.state)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 100) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 101)     def get_possible_actions(self) -> List[str]:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 102)         return []
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 103) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 104)     def depth(self) -> int:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 105)         depth = 0
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 106)         node = self.parent
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 107)         while node is not None:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 108)             depth += 1
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 109)             node = node.parent
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 110)         return depth
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 111) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 112) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 113) class MCTS:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 114)     def __init__(self, config: Optional[MCTSConfig] = None):
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 115)         self.config = config or MCTSConfig()
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 116)         self._model = None   # policy model — generates candidate steps
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 117)         self._critic = None  # reward model — evaluates states (Method 2); falls back to _model
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 118)         self._ppm = None     # PPM-compatible process scorer; takes priority over critic
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 119)         self._rng = np.random.default_rng(self.config.seed)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 120)         self.last_stats: Dict[str, Any] = {}
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 121)         self._eval_cache: Dict[str, float] = {}  # state → score cache
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 122) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 123)     def set_model(self, model: Any) -> None:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 124)         self._model = model
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 125) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 126)     def set_critic(self, model: Any) -> None:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 127)         """Attach a separate reward model for evaluate_state() (Method 2).
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 128) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 129)         The critic is only used for scoring — step generation always uses the
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 130)         main model.  PPM takes priority over the critic when both are set.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 131)         Typical pairing: large model as generator, cheap model as critic.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 132)         """
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 133)         self._critic = model
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 134) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 135)     def set_ppm(self, ppm: Any) -> None:
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 136)         """Attach a trained PPM or compatible process scorer to guide search."""
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 137)         self._ppm = ppm
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 138) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 139)     @classmethod
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 140)     def from_config_file(cls, config_path: str) -> 'MCTS':
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 141)         with open(config_path, 'r') as f:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 142)             config_data = json.load(f)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 143)         config = MCTSConfig(**config_data['mcts'])
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 144)         return cls(config)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 145) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 146)     def select_action(self, node: MCTSNode) -> Tuple[MCTSNode, str]:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 147)         if not node.children:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 148)             return node, ""
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 149)         ucb_scores = [
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 150)             child.get_ucb_score(self.config.exploration_weight)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 151)             for child in node.children
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 152)         ]
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 153)         selected_child = node.children[np.argmax(ucb_scores)]
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 154)         return selected_child, selected_child.action
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 155) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 156)     def expand(self, node: MCTSNode) -> Tuple[MCTSNode, str]:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 157)         if not node.untried_actions:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 158)             actions = self.get_possible_actions(node.state)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 159)             node.untried_actions = self._prepare_actions(actions, node.state, node)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 160)         if not node.untried_actions:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 161)             return node, ""
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 162)         action = node.untried_actions[0]
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 163)         new_state = self.apply_action(node.state, action)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 164)         child = node.add_child(action, new_state)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 165)         self._stats_increment("nodes_expanded")
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 166)         if child.is_terminal():
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 167)             self._stats_increment("terminal_nodes")
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 168)         return child, action
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 169) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 170)     def simulate(self, state: str, depth: int = 0) -> float:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 171)         self.last_stats["max_depth_reached"] = max(
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 172)             self.last_stats.get("max_depth_reached", 0),
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 173)             depth
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 174)         )
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 175)         if depth >= self.config.max_depth or self.is_terminal_state(state):
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 176)             return self.evaluate_state(state)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 177)         actions = self.get_possible_actions(state)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 178)         actions = self._prepare_actions(actions, state, None)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 179)         if not actions:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 180)             return self.evaluate_state(state)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 181)         action = self._select_rollout_action(actions, state)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 182)         new_state = self.apply_action(state, action)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 183)         return self.simulate(new_state, depth + 1)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 184) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 185)     def backpropagate(self, node: MCTSNode, reward: float) -> None:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 186)         while node is not None:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 187)             node.update(reward)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 188)             node = node.parent
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 189) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 190)     def search(self, root_state: str, model: Any = None) -> Tuple[str, List[Dict[str, Any]]]:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 191)         if model is not None:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 192)             self._model = model
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 193) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 194)         started_at = time.perf_counter()
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 195)         self._init_stats(root_state)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 196)         self._eval_cache.clear()
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 197)         root = MCTSNode(state=root_state)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 198)         trajectory = []
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 199) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 200)         for simulation_index in range(self.config.max_simulations):
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 201)             # Token budget check: stop search if over budget
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 202)             if self._over_token_budget():
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 203)                 self.last_stats["budget_stopped"] = True
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 204)                 break
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 205) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 206)             self._stats_increment("simulations_run")
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 207)             node = root
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 208) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 209)             # Selection
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 210)             while node.children and not node.untried_actions:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 211)                 node, action = self.select_action(node)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 212)                 trajectory.append(self._trajectory_entry(
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 213)                     node=node,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 214)                     action=action,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 215)                     phase="selection",
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 216)                     simulation=simulation_index
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 217)                 ))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 218)                 if node.is_terminal():
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 219)                     break
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 220) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 221)             # Expansion
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 222)             if not node.is_terminal():
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 223)                 node, action = self.expand(node)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 224)                 if action:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 225)                     trajectory.append(self._trajectory_entry(
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 226)                         node=node,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 227)                         action=action,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 228)                         phase="expansion",
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 229)                         simulation=simulation_index
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 230)                     ))
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 231) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 232)             # Simulation
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 233)             reward = self.simulate(node.state, node.depth())
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 234)             self.last_stats["best_reward"] = max(
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 235)                 self.last_stats.get("best_reward", 0.0),
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 236)                 reward
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 237)             )
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 238) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 239)             # Backpropagation
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 240)             self.backpropagate(node, reward)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 241) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 242)             if self._should_early_stop(reward, simulation_index + 1):
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 243)                 self.last_stats["early_stopped"] = True
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 244)                 break
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 245) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 246)         self.last_stats["latency_seconds"] = time.perf_counter() - started_at
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 247) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 248)         if not root.children:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 249)             # Fallback: generate one direct solution
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 250)             actions = self.get_possible_actions(root_state)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 251)             if actions:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 252)                 final_state = self.apply_action(root_state, actions[0])
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 253)                 trajectory.append({"state": final_state, "action": actions[0], "value": 0.0, "visits": 1})
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 254)                 return actions[0], trajectory
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 255)             return "", trajectory
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 256) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 257)         best_child = self._best_child(root)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 258)         return best_child.action, trajectory
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 259) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 260)     # Domain-specific implementations for math reasoning
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 261) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 262)     def get_possible_actions(self, state: str) -> List[str]:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 263)         """Ask the LLM for candidate next reasoning steps.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 264) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 265)         When config.parallel_actions is True and multiple candidates are needed,
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 266)         issues concurrent LLM calls to reduce wall-clock latency.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 267)         All calls use config.max_retries / retry_delay for fault tolerance.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 268)         """
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 269)         if self._model is None or self.is_terminal_state(state):
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 270)             return []
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 271) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 272)         action_count = self._candidate_count_for_state(state)
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 273)         problem = state.split("\n", 1)[0].strip()
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 274)         prompt = f"""You are solving a math problem step by step.
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 275) 
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 276) Original problem:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 277) {problem}
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 278) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 279) Current reasoning so far:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 280) {state}
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 281) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 282) Generate {action_count} different candidate next reasoning steps.
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 283) Each candidate must be one atomic, verifiable next step, not a complete solution.
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 284) Keep each candidate under 25 words when possible.
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 285) For algebra, expand expressions before matching coefficients, then compare each coefficient exactly.
+60b43696 (superwayne66 2026-05-05 21:13:07 -0400 286) For coefficient matching, for example (Ax-k)(mBx+C) expands to mABx^2 + (AC-kmB)x - kC.
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 287) Do not invent shortcut coefficient equations; every equation must follow from the previous line.
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 288) Use exact arithmetic and check signs carefully.
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 289) Do not include explanations before or after the STEP lines.
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 290) If the problem is solved, write the final step as:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 291) FINAL ANSWER: <answer>
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 292) 
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 293) Use plain text only. Format each candidate on its own line, prefixed with "STEP:" like:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 294) STEP: <step text>
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 295) STEP: <step text>"""
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 296) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 297)         def _call() -> str:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 298)             return self._model.generate_response(
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 299)                 prompt,
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 300)                 temperature=self.config.generation_temperature,
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 301)                 max_tokens=self.config.generation_max_tokens,
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 302)             )
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 303) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 304)         try:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 305)             if self.config.parallel_actions and action_count > 1:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 306)                 # Fire action_count parallel calls and merge unique steps
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 307)                 with ThreadPoolExecutor(max_workers=action_count) as pool:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 308)                     futures = [pool.submit(self._call_with_retry, _call) for _ in range(action_count)]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 309)                     responses = [f.result() for f in as_completed(futures) if f.exception() is None]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 310)                 all_steps: List[str] = []
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 311)                 for resp in responses:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 312)                     self._record_model_generation(prompt, resp)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 313)                     all_steps.extend(self._parse_steps(resp))
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 314)                 return all_steps or [responses[0].strip()] if responses else []
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 315)             else:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 316)                 response = self._call_with_retry(_call)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 317)                 self._record_model_generation(prompt, response)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 318)                 return self._parse_steps(response) or [response.strip()]
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 319)         except Exception as exc:
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 320)             self._record_model_failure(exc)
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 321)             if self.config.fail_fast_on_generation_error:
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 322)                 raise RuntimeError(
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 323)                     "Model generation failed before MCTS could create candidate steps: "
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 324)                     f"{type(exc).__name__}: {exc}"
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 325)                 ) from exc
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 326)             return []
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 327) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 328)     def _parse_steps(self, response: str) -> List[str]:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 329)         steps = re.findall(r'^\s*(?:[-*]\s*)?STEP:\s*(.+)$', response, flags=re.IGNORECASE | re.MULTILINE)
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 330)         if not steps:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 331)             steps = re.findall(r'^\s*\d+[.)]\s+(.+)$', response, flags=re.MULTILINE)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 332)         if not steps:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 333)             steps = [line.strip() for line in response.splitlines() if line.strip()]
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 334)         if len(steps) <= 1 and steps:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 335)             steps = self._split_long_candidate(steps[0])
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 336)         return [self._clean_candidate_step(s) for s in steps if s.strip()]
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 337) 
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 338)     def _split_long_candidate(self, text: str) -> List[str]:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 339)         cleaned = " ".join(text.strip().split())
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 340)         pieces = re.split(
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 341)             r'(?<=[.!?])\s+|;\s+|\\\]\s*|(?=\b(?:Next|Then|Therefore|Now|Finally)\b)|(?=\s*\d+[.)]\s+)',
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 342)             cleaned,
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 343)         )
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 344)         pieces = [piece.strip() for piece in pieces if piece.strip()]
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 345)         if len(pieces) > 1:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 346)             return pieces[: self._candidate_count_for_state(cleaned)]
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 347)         if len(cleaned.split()) <= 40:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 348)             return [cleaned]
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 349)         return pieces[: self._candidate_count_for_state(cleaned)] if pieces else [cleaned]
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 350) 
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 351)     def _clean_candidate_step(self, text: str) -> str:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 352)         cleaned = " ".join(text.strip().split())
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 353)         if "final answer:" in cleaned.lower():
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 354)             return cleaned
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 355)         words = cleaned.split()
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 356)         if len(words) <= 42:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 357)             return cleaned
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 358)         return " ".join(words[:42]).rstrip(" ,;") + "."
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 359) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 360)     def _call_with_retry(self, fn) -> str:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 361)         """Call fn() with exponential backoff on failure."""
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 362)         delay = self.config.retry_delay
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 363)         last_exc: Exception = RuntimeError("no attempts made")
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 364)         for attempt in range(max(1, self.config.max_retries)):
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 365)             try:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 366)                 return fn()
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 367)             except Exception as exc:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 368)                 last_exc = exc
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 369)                 if attempt < self.config.max_retries - 1:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 370)                     time.sleep(delay)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 371)                     delay *= 2
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 372)         raise last_exc
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 373) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 374)     def apply_action(self, state: str, action: str) -> str:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 375)         """Append a reasoning step; truncate context when max_state_steps is set.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 376) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 377)         Keeping only the problem + last N steps prevents unbounded token growth
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 378)         when using large models with per-token pricing.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 379)         """
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 380)         new_state = f"{state}\n{action}"
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 381)         n = self.config.max_state_steps
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 382)         if n > 0:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 383)             lines = [l for l in new_state.split('\n') if l.strip()]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 384)             if len(lines) > n + 1:          # preserve problem statement (line 0)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 385)                 lines = lines[:1] + lines[-(n):]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 386)             new_state = '\n'.join(lines)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 387)         return new_state
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 388) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 389)     def is_terminal_state(self, state: str) -> bool:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 390)         return _is_terminal(state)
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 391) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 392)     def evaluate_state(self, state: str) -> float:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 393)         """Score the current reasoning state.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 394) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 395)         Priority order:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 396)           1. Cache hit — return immediately, no model call.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 397)           2. PPM (if attached) — fastest learned scorer; Method 1 & 2.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 398)           3. Critic model (if set via set_critic) — Method 2 asymmetric reward;
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 399)              uses the cheap/separate evaluator instead of the generator.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 400)           4. Main model evaluate_reasoning — fallback for terminal states.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 401)           5. Heuristic progress estimate — fallback for non-terminal states.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 402)         """
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 403)         if self._model is None:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 404)             return 0.5
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 405) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 406)         cache_key = state.strip()
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 407)         if self.config.eval_cache and cache_key in self._eval_cache:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 408)             self._stats_increment("cache_hits")
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 409)             return self._eval_cache[cache_key]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 410) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 411)         lines = [l for l in state.split('\n') if l.strip()]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 412) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 413)         if self._ppm is not None:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 414)             # Method 1 / 2 (PPM path): fastest, takes priority over any LLM critic
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 415)             score = self._evaluate_with_ppm(lines)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 416)         elif self.is_terminal_state(state):
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 417)             problem = lines[0] if lines else ""
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 418)             steps = lines[1:] if len(lines) > 1 else [state]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 419)             # Method 2 (asymmetric critic path): use cheap evaluator if registered
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 420)             evaluator = self._critic if self._critic is not None else self._model
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 421)             try:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 422)                 self._record_model_evaluation(problem, steps)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 423)                 score = self._call_with_retry(
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 424)                     lambda: evaluator.evaluate_reasoning(problem, steps)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 425)                 )
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 426)             except Exception:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 427)                 score = 0.7
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 428)         elif self._uses_adaptive_search():
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 429)             score = self._estimate_state_progress(state)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 430)         else:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 431)             score = 0.3
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 432) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 433)         if self.config.eval_cache:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 434)             self._eval_cache[cache_key] = score
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 435)         return score
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 436) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 437)     def _evaluate_with_ppm(self, lines: List[str]) -> float:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 438)         """Use the PPM to score the state.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 439) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 440)         For terminal states, average all step scores.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 441)         For non-terminal states, score only the last step (most recent action).
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 442)         The problem statement (first line) is forwarded as context when a
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 443)         ContextAwarePPM is attached; ignored by the base ProcessPreferenceModel.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 444)         Falls back to 0.5 on any error.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 445)         """
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 446)         steps = lines[1:] if len(lines) > 1 else lines
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 447)         problem = lines[0] if lines else ""
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 448)         if not steps:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 449)             return 0.5
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 450)         try:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 451)             if self.is_terminal_state('\n'.join(lines)):
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 452)                 scores = [self._score_with_process_model(s, '\n'.join(lines)) for s in steps]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 453)                 return float(np.mean(scores))
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 454)             # Non-terminal: score only the latest step
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 455)             return self._score_with_process_model(steps[-1], '\n'.join(lines))
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 456)         except Exception:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 457)             return 0.5
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 458) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 459)     # Member 1 adaptive search helpers
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 460) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 461)     def _uses_adaptive_search(self) -> bool:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 462)         return self.config.search_strategy.lower() in {"adaptive", "improved", "member1"}
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 463) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 464)     def _candidate_count_for_state(self, state: str) -> int:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 465)         if not self._uses_adaptive_search():
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 466)             return self.config.num_actions
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 467)         depth = self._state_depth(state)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 468)         if depth <= 1:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 469)             return max(self.config.num_actions, self.config.max_branching_factor)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 470)         return max(self.config.min_branching_factor, self.config.num_actions)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 471) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 472)     def _prepare_actions(
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 473)         self,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 474)         actions: Sequence[str],
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 475)         state: str,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 476)         node: Optional[MCTSNode]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 477)     ) -> List[str]:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 478)         if not actions:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 479)             return []
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 480) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 481)         if not self._uses_adaptive_search():
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 482)             return [action for action in actions if action.strip()]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 483) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 484)         self._stats_increment("generated_actions", len(actions))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 485)         unique_actions = self._dedupe_actions(actions)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 486)         if len(unique_actions) < len(actions):
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 487)             self._stats_increment("pruned_actions", len(actions) - len(unique_actions))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 488) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 489)         # ── Method 1: PPM pre-scoring ──────────────────────────────────────
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 490)         # When a PPM is attached and top_k_prune > 0, score every candidate
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 491)         # with the PPM and keep only the top-k before any expansion happens.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 492)         # This replaces the keyword heuristic with a learned signal and cuts
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 493)         # the branching factor to exactly k, reducing downstream LLM calls.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 494)         if self._ppm is not None and self.config.top_k_prune > 0:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 495)             return self._ppm_prune(unique_actions, state)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 496) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 497)         # ── Default: keyword heuristic scoring ────────────────────────────
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 498)         scored_actions = [
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 499)             (self._score_action(action, state, node), action)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 500)             for action in unique_actions
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 501)         ]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 502)         scored_actions.sort(key=lambda item: item[0], reverse=True)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 503) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 504)         if not scored_actions:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 505)             return []
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 506) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 507)         best_score = scored_actions[0][0]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 508)         min_keep = max(1, self.config.min_branching_factor)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 509)         kept = [
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 510)             action for score, action in scored_actions
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 511)             if score >= best_score - self.config.prune_threshold
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 512)         ]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 513)         if len(kept) < min_keep:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 514)             kept = [action for _, action in scored_actions[:min_keep]]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 515) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 516)         max_keep = max(min_keep, self.config.max_branching_factor)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 517)         kept = kept[:max_keep]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 518)         self._stats_increment("pruned_actions", len(scored_actions) - len(kept))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 519)         return kept
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 520) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 521)     def _ppm_prune(self, actions: List[str], state: str) -> List[str]:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 522)         """Score each candidate step with the PPM and keep top-k (Method 1).
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 523) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 524)         Scores are computed in parallel when parallel_actions is enabled.
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 525)         The problem statement (first line of state) is forwarded as context
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 526)         when a ContextAwarePPM is attached.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 527)         Falls back to heuristic score for any step that fails PPM scoring.
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 528)         """
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 529)         k = max(1, self.config.top_k_prune)
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 530)         problem = state.split('\n')[0].strip() if state else ""
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 531) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 532)         def _score(action: str) -> Tuple[float, str]:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 533)             try:
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 534)                 return (self._score_with_process_model(action, state), action)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 535)             except Exception:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 536)                 return (self._estimate_action_value(action, state), action)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 537) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 538)         if self.config.parallel_actions and len(actions) > 1:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 539)             with ThreadPoolExecutor(max_workers=len(actions)) as pool:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 540)                 scored = list(pool.map(_score, actions))
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 541)         else:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 542)             scored = [_score(a) for a in actions]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 543) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 544)         scored.sort(key=lambda t: t[0], reverse=True)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 545)         kept = [action for _, action in scored[:k]]
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 546)         n_pruned = len(scored) - len(kept)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 547)         self._stats_increment("ppm_pruned", n_pruned)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 548)         self._stats_increment("pruned_actions", n_pruned)
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 549)         return kept
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 550) 
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 551)     def _score_with_process_model(self, step: str, state: str = "") -> float:
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 552)         """Score a step with the attached PPM-compatible scorer.
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 553) 
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 554)         New scorers can accept an optional state= argument. Older PPM objects
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 555)         only accept (step, embedder), so keep that path for compatibility.
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 556)         """
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 557)         try:
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 558)             return float(self._ppm.evaluate_step(step, self._model, state=state))
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 559)         except TypeError:
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 560)             return float(self._ppm.evaluate_step(step, self._model))
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 561) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 562)     def _dedupe_actions(self, actions: Sequence[str]) -> List[str]:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 563)         seen = set()
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 564)         unique = []
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 565)         for action in actions:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 566)             cleaned = action.strip()
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 567)             if not cleaned:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 568)                 continue
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 569)             key = self._normalize_text(cleaned)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 570)             if key in seen:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 571)                 continue
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 572)             seen.add(key)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 573)             unique.append(cleaned)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 574)         return unique
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 575) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 576)     def _score_action(
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 577)         self,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 578)         action: str,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 579)         state: str,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 580)         node: Optional[MCTSNode]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 581)     ) -> float:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 582)         value_score = self._estimate_action_value(action, state)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 583)         diversity_score = self._estimate_action_diversity(action, state, node)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 584)         diversity_weight = min(max(self.config.diversity_weight, 0.0), 1.0)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 585)         return (1.0 - diversity_weight) * value_score + diversity_weight * diversity_score
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 586) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 587)     def _estimate_action_value(self, action: str, state: str) -> float:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 588)         lower = action.lower()
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 589)         score = 0.35
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 590) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 591)         if _is_terminal(self.apply_action(state, action)):
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 592)             score += 0.45
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 593)         if re.search(r'[-+*/=^]|\d', action):
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 594)             score += 0.10
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 595)         if any(word in lower for word in [
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 596)             "because", "therefore", "substitute", "simplify", "factor",
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 597)             "differentiate", "solve", "check", "verify", "expand",
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 598)             "coefficient", "compare", "match", "equation", "constant"
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 599)         ]):
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 600)             score += 0.08
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 601)         if len(action.split()) < 3:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 602)             score -= 0.12
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 603)         if len(action.split()) > 30:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 604)             score -= 0.18
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 605)         if any(word in lower for word in ["guess", "maybe", "unrelated", "skip"]):
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 606)             score -= 0.18
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 607) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 608)         return max(0.0, min(1.0, score))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 609) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 610)     def _estimate_action_diversity(
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 611)         self,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 612)         action: str,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 613)         state: str,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 614)         node: Optional[MCTSNode]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 615)     ) -> float:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 616)         references = [line for line in state.splitlines() if line.strip()]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 617)         if node is not None:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 618)             references.extend(child.action for child in node.children if child.action)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 619)         if not references:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 620)             return 1.0
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 621)         max_similarity = max(self._jaccard_similarity(action, ref) for ref in references)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 622)         return 1.0 - max_similarity
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 623) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 624)     def _select_rollout_action(self, actions: Sequence[str], state: str) -> str:
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 625)         """PPM-guided Monte Carlo rollout sampling (Innovation 5 in PPM suite).
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 626) 
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 627)         Original behavior: always pick actions[0] — deterministic, not Monte Carlo.
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 628)         With PPM attached: sample proportionally to PPM scores so each simulation
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 629)         explores a different path, restoring the stochastic property that MCTS
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 630)         value estimates depend on.
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 631)         """
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 632)         if self._ppm is not None and len(actions) > 1:
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 633)             scores: List[float] = []
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 634)             for a in actions:
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 635)                 try:
+597221a0 (superwayne66 2026-05-05 16:34:55 -0400 636)                     scores.append(max(1e-6, self._score_with_process_model(a, state)))
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 637)                 except Exception:
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 638)                     scores.append(1e-6)
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 639)             total = sum(scores)
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 640)             probs = [s / total for s in scores]
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 641)             idx = int(self._rng.choice(len(actions), p=probs))
+55990bed (cinnnamooon  2026-05-05 13:44:00 -0400 642)             return actions[idx]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 643)         return actions[0]
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 644) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 645)     def _best_child(self, root: MCTSNode) -> MCTSNode:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 646)         if not self._uses_adaptive_search():
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 647)             return max(root.children, key=lambda child: child.visits)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 648)         return max(root.children, key=lambda child: (child.value, child.visits))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 649) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 650)     def _should_early_stop(self, reward: float, simulations_run: int) -> bool:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 651)         if not self._uses_adaptive_search():
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 652)             return False
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 653)         if simulations_run < self.config.early_stop_min_simulations:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 654)             return False
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 655)         return reward >= self.config.early_stop_reward
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 656) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 657)     def _estimate_state_progress(self, state: str) -> float:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 658)         depth = self._state_depth(state)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 659)         has_math = bool(re.search(r'[-+*/=^]|\d', state))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 660)         progress = 0.25 + min(depth, self.config.max_depth) * 0.05
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 661)         if has_math:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 662)             progress += 0.05
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 663)         return max(0.0, min(0.65, progress))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 664) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 665)     def _state_depth(self, state: str) -> int:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 666)         return max(0, len([line for line in state.splitlines() if line.strip()]) - 1)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 667) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 668)     def _trajectory_entry(
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 669)         self,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 670)         node: MCTSNode,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 671)         action: str,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 672)         phase: str,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 673)         simulation: int
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 674)     ) -> Dict[str, Any]:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 675)         return {
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 676)             "state": node.state,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 677)             "action": action,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 678)             "value": node.value,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 679)             "visits": node.visits,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 680)             "phase": phase,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 681)             "depth": node.depth(),
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 682)             "simulation": simulation
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 683)         }
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 684) 
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 685)     def _over_token_budget(self) -> bool:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 686)         budget = self.config.token_budget
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 687)         if budget <= 0:
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 688)             return False
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 689)         return self.last_stats.get("estimated_tokens", 0) >= budget
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 690) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 691)     def _init_stats(self, root_state: str) -> None:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 692)         self.last_stats = {
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 693)             "strategy": self.config.search_strategy,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 694)             "root_problem": root_state,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 695)             "simulations_run": 0,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 696)             "nodes_expanded": 0,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 697)             "terminal_nodes": 0,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 698)             "generated_actions": 0,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 699)             "pruned_actions": 0,
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 700)             "ppm_pruned": 0,          # steps removed by PPM pre-scoring (Method 1)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 701)             "model_calls": 0,
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 702)             "failed_model_calls": 0,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 703)             "estimated_tokens": 0,
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 704)             "cache_hits": 0,
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 705)             "using_critic": self._critic is not None,   # Method 2 flag
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 706)             "using_ppm": self._ppm is not None,         # Method 1/2 compatibility flag
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 707)             "using_process_scorer": self._ppm is not None,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 708)             "best_reward": 0.0,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 709)             "max_depth_reached": 0,
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 710)             "early_stopped": False,
+b9cb1e12 (cinnnamooon  2026-05-01 17:10:03 -0400 711)             "budget_stopped": False,
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 712)             "latency_seconds": 0.0,
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 713)             "last_error": ""
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 714)         }
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 715) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 716)     def _stats_increment(self, key: str, amount: int = 1) -> None:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 717)         if not self.last_stats:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 718)             return
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 719)         self.last_stats[key] = self.last_stats.get(key, 0) + amount
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 720) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 721)     def _record_model_generation(self, prompt: str, response: str) -> None:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 722)         self._stats_increment("model_calls")
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 723)         self._stats_increment("estimated_tokens", self._estimate_tokens(prompt) + self._estimate_tokens(response))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 724)         self._record_provider_token_usage()
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 725) 
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 726)     def _record_model_failure(self, exc: Exception) -> None:
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 727)         self._stats_increment("failed_model_calls")
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 728)         self.last_stats["last_error"] = f"{type(exc).__name__}: {exc}"
+cda0f1e2 (superwayne66 2026-05-05 13:16:04 -0400 729) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 730)     def _record_model_evaluation(self, problem: str, steps: Sequence[str]) -> None:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 731)         self._stats_increment("model_calls")
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 732)         text = problem + "\n" + "\n".join(steps)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 733)         self._stats_increment("estimated_tokens", self._estimate_tokens(text))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 734)         self._record_provider_token_usage()
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 735) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 736)     def _record_provider_token_usage(self) -> None:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 737)         if self._model is None:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 738)             return
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 739)         usage = getattr(self._model, "last_usage", None) or getattr(self._model, "last_token_usage", None)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 740)         if isinstance(usage, dict):
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 741)             total = usage.get("total_tokens") or usage.get("total")
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 742)             if isinstance(total, int):
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 743)                 self.last_stats["provider_tokens"] = self.last_stats.get("provider_tokens", 0) + total
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 744) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 745)     def _estimate_tokens(self, text: str) -> int:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 746)         return max(1, len(text) // 4)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 747) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 748)     def _normalize_text(self, text: str) -> str:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 749)         return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 750) 
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 751)     def _jaccard_similarity(self, left: str, right: str) -> float:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 752)         left_tokens = set(re.findall(r"[a-z0-9]+", left.lower()))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 753)         right_tokens = set(re.findall(r"[a-z0-9]+", right.lower()))
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 754)         if not left_tokens or not right_tokens:
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 755)             return 0.0
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 756)         return len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
+c0b89c29 (superwayne66 2026-04-27 06:05:29 -0400 757) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 758) 
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 759) def _is_terminal(state: str) -> bool:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 760)     # Only check the last non-empty line to avoid matching the problem statement
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 761)     lines = [l.strip() for l in state.split('\n') if l.strip()]
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 762)     if len(lines) <= 1:
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 763)         return False
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 764)     last = lines[-1].lower()
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 765)     markers = ["final answer:", "therefore the answer is", "the answer is"]
+87b5fa27 (Hammer       2026-04-21 01:28:06 -0400 766)     return any(m in last for m in markers)

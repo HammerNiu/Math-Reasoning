@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.core.ppm import PPMConfig, PPMTrainer, ProcessPreferenceModel
+from src.core.ppm import PPMConfig, PPMTrainer, ProcessPreferenceModel, ContextAwarePPM
 from src.model.model_interface import ModelFactory
 
 
@@ -43,12 +43,39 @@ def load_preference_pairs(data_path: Path) -> List[Dict[str, str]]:
             if not line:
                 continue
             record: Dict[str, Any] = json.loads(line)
+            if "preferred" in record and "non_preferred" in record:
+                pair = _clean_pair(record)
+                if pair:
+                    pairs.append(pair)
+                continue
             for pair in record.get("preference_pairs", []):
-                preferred = (pair.get("preferred") or "").strip()
-                non_preferred = (pair.get("non_preferred") or "").strip()
-                if preferred and non_preferred:
-                    pairs.append({"preferred": preferred, "non_preferred": non_preferred})
+                merged = dict(pair)
+                if record.get("problem") and not merged.get("problem"):
+                    merged["problem"] = record["problem"]
+                cleaned = _clean_pair(merged)
+                if cleaned:
+                    pairs.append(cleaned)
     return pairs
+
+
+def _clean_pair(record: Dict[str, Any]) -> Dict[str, Any]:
+    preferred = (record.get("preferred") or "").strip()
+    non_preferred = (record.get("non_preferred") or "").strip()
+    if not preferred or not non_preferred:
+        return {}
+    pair: Dict[str, Any] = {
+        "preferred": preferred,
+        "non_preferred": non_preferred,
+    }
+    if record.get("problem"):
+        pair["problem"] = str(record["problem"])
+    for key in ("preferred_reward", "non_preferred_reward"):
+        if key in record:
+            try:
+                pair[key] = float(record[key])
+            except (TypeError, ValueError):
+                pass
+    return pair
 
 
 # ---------------------------------------------------------------------------
@@ -82,17 +109,22 @@ def train(args: argparse.Namespace) -> None:
     embedder = LocalEmbedder.get()
     print(f"Using local embedder: all-MiniLM-L6-v2  (dim={embedder.dim})")
 
-    # Build PPM — input_dim must match embedding dimension
+    # Build PPM. Context-aware is the stronger default for AMC because the same
+    # step text can be right or wrong depending on the problem.
     ppm_config = PPMConfig(
-        input_dim=embedder.dim,
+        input_dim=embedder.dim * 2 if args.context_aware else embedder.dim,
         hidden_dim=args.hidden_dim,
         learning_rate=args.lr,
         batch_size=args.batch_size,
     )
-    ppm = ProcessPreferenceModel(ppm_config)
+    ppm: ProcessPreferenceModel
+    if args.context_aware:
+        ppm = ContextAwarePPM(embedding_dim=embedder.dim, config=ppm_config)
+    else:
+        ppm = ProcessPreferenceModel(ppm_config)
     trainer = PPMTrainer(ppm)
 
-    print(f"Training for {args.epochs} epochs …")
+    print(f"Training {'ContextAwarePPM' if args.context_aware else 'ProcessPreferenceModel'} for {args.epochs} epochs ...")
     history = trainer.train(
         train_data,
         embedder,
@@ -126,6 +158,8 @@ def main() -> None:
     parser.add_argument("--hidden-dim", type=int, default=256, help="PPM hidden layer dimension")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
+    parser.add_argument("--context-aware", action=argparse.BooleanOptionalAction, default=True,
+                        help="Train ContextAwarePPM instead of the older step-only PPM")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for train/val split")
     args = parser.parse_args()
     train(args)
